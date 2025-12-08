@@ -199,9 +199,13 @@ python-executor/
 ├── pyproject.toml
 ├── README.md
 └── src/
-    └── python_executor_mcp/
+    ├── pyx_core/         # Core execution functions (shared)
+    │   ├── __init__.py
+    │   └── executor.py
+    ├── pyx_cli/          # CLI interface
+    │   ├── __init__.py
+    │   └── cli.py
+    └── pyx_mcp/          # MCP server
         ├── __init__.py
-        ├── cli.py        # CLI entry point
-        ├── executor.py   # Core execution functions
-        └── server.py     # MCP server
+        └── server.py
 ```

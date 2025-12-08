@@ -6,13 +6,13 @@ Provides command line access to the executor functions.
 import argparse
 import sys
 
-from .executor import run_code, run_file, add_package, ensure_temp, list_env_keys
+from pyx_core import run_code, run_file, add_package, ensure_temp, list_env_keys
 
 
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        prog="python-executor",
+        prog="pyx",
         description="A cross-platform Python code executor that avoids shell-specific issues.",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")

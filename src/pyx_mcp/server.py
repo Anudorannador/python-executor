@@ -10,12 +10,12 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from .executor import run_code, run_file, add_package, ensure_temp, list_env_keys
+from pyx_core import run_code, run_file, add_package, ensure_temp, list_env_keys
 
-logger = logging.getLogger("python-executor-mcp")
+logger = logging.getLogger("pyx-mcp")
 
 # Create MCP Server
-app = Server("python-executor-mcp")
+app = Server("pyx-mcp")
 
 
 @app.list_tools()
