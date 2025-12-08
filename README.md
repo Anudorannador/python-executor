@@ -43,6 +43,7 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | `pyx run --base64 "..." [-y]` | Run base64-encoded code (for complex code) |
 | `pyx run --file "path.py"` | Run a Python script file |
 | `pyx run --file "path.py" -- args` | Run script with arguments |
+| `pyx run --cwd "dir" --code "..."` | Run code in specified directory |
 | `pyx add --package "name"` | Install a package to optional dependencies |
 | `pyx list-env` | List available environment variable keys |
 | `pyx ensure-temp` | Ensure temp directory exists |

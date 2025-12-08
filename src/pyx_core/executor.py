@@ -38,17 +38,36 @@ class ExecutionResult:
     error: str | None = None
 
 
-def run_code(code: str, capture_output: bool = True) -> ExecutionResult:
+def run_code(code: str, capture_output: bool = True, cwd: str | None = None) -> ExecutionResult:
     """
     Execute inline Python code.
     
     Args:
         code: Python code to execute
         capture_output: If True, capture stdout/stderr; if False, print directly
+        cwd: Working directory to run the code in. If None, uses current directory.
         
     Returns:
         ExecutionResult with success status and output
     """
+    # Validate and change to cwd if specified
+    original_cwd = os.getcwd()
+    if cwd:
+        cwd_path = Path(cwd)
+        if not cwd_path.exists():
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Directory not found: {cwd}"
+            )
+        if not cwd_path.is_dir():
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Not a directory: {cwd}"
+            )
+        os.chdir(cwd_path.resolve())
+    
     # Load global .env (python-executor dir) + local .env (cwd)
     _load_all_env()
     
@@ -70,15 +89,21 @@ def run_code(code: str, capture_output: bool = True) -> ExecutionResult:
                 output=stdout_capture.getvalue(),
                 error=f"{traceback.format_exc()}"
             )
+        finally:
+            if cwd:
+                os.chdir(original_cwd)
     else:
         try:
             exec(code, {"__name__": "__main__"})
             return ExecutionResult(success=True, output="")
         except Exception as e:
             return ExecutionResult(success=False, output="", error=str(e))
+        finally:
+            if cwd:
+                os.chdir(original_cwd)
 
 
-def run_file(file_path: str, script_args: list[str] | None = None, capture_output: bool = True) -> ExecutionResult:
+def run_file(file_path: str, script_args: list[str] | None = None, capture_output: bool = True, cwd: str | None = None) -> ExecutionResult:
     """
     Execute a Python script file.
     
@@ -86,10 +111,27 @@ def run_file(file_path: str, script_args: list[str] | None = None, capture_outpu
         file_path: Path to the Python script
         script_args: Arguments to pass to the script (will be set as sys.argv[1:])
         capture_output: If True, capture stdout/stderr; if False, print directly
+        cwd: Working directory to run the script in. If None, uses the script's directory.
         
     Returns:
         ExecutionResult with success status and output
     """
+    # Validate cwd if specified
+    if cwd:
+        cwd_path = Path(cwd)
+        if not cwd_path.exists():
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Directory not found: {cwd}"
+            )
+        if not cwd_path.is_dir():
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=f"Not a directory: {cwd}"
+            )
+    
     # Load global .env (python-executor dir) + local .env (cwd)
     _load_all_env()
     
@@ -131,8 +173,9 @@ def run_file(file_path: str, script_args: list[str] | None = None, capture_outpu
         "__file__": str(path.resolve()),
     }
     
-    # Change to script directory for relative imports
+    # Determine working directory: use cwd if specified, otherwise script's directory
     original_cwd = os.getcwd()
+    target_cwd = Path(cwd).resolve() if cwd else path.parent.resolve()
     
     # Save and set sys.argv
     original_argv = sys.argv
@@ -143,7 +186,7 @@ def run_file(file_path: str, script_args: list[str] | None = None, capture_outpu
         stderr_capture = io.StringIO()
         
         try:
-            os.chdir(path.parent.resolve())
+            os.chdir(target_cwd)
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 exec(code, script_globals)
             return ExecutionResult(
@@ -162,7 +205,7 @@ def run_file(file_path: str, script_args: list[str] | None = None, capture_outpu
             sys.argv = original_argv
     else:
         try:
-            os.chdir(path.parent.resolve())
+            os.chdir(target_cwd)
             exec(code, script_globals)
             return ExecutionResult(success=True, output="")
         except Exception as e:

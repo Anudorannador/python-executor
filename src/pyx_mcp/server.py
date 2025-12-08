@@ -31,6 +31,10 @@ async def list_tools() -> list[Tool]:
                     "code": {
                         "type": "string",
                         "description": "Python code to execute. Can be multi-line. All standard library modules are available, plus pre-installed packages like requests, pandas, numpy, etc."
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": "Working directory to run the code in. If not specified, uses current directory."
                     }
                 },
                 "required": ["code"]
@@ -38,13 +42,22 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="run_python_file",
-            description="Execute a Python script file. The script runs with __file__ set to its path and working directory changed to the script's directory for relative imports.",
+            description="Execute a Python script file. The script runs with __file__ set to its path. Use cwd to specify working directory, and script_args to pass command line arguments.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
                         "description": "Absolute or relative path to the Python script file to execute."
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": "Working directory to run the script in. If not specified, uses the script's directory."
+                    },
+                    "script_args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Command line arguments to pass to the script (will be set as sys.argv[1:])."
                     }
                 },
                 "required": ["file_path"]
@@ -97,7 +110,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     
     if name == "run_python_code":
         code = arguments.get("code", "")
-        result = run_code(code)
+        cwd = arguments.get("cwd")
+        result = run_code(code, cwd=cwd)
         
         output_parts = []
         if result.output:
@@ -115,7 +129,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     
     elif name == "run_python_file":
         file_path = arguments.get("file_path", "")
-        result = run_file(file_path)
+        cwd = arguments.get("cwd")
+        script_args = arguments.get("script_args", [])
+        result = run_file(file_path, script_args=script_args, cwd=cwd)
         
         output_parts = []
         if result.output:

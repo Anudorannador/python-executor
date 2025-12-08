@@ -5,6 +5,7 @@ Provides command line access to the executor functions.
 
 import argparse
 import base64
+import os
 import sys
 
 from rich.console import Console
@@ -26,6 +27,7 @@ def main():
 
     # run command
     run_parser = subparsers.add_parser("run", help="Run Python code or a script file")
+    run_parser.add_argument("--cwd", type=str, help="Change to this directory before execution")
     run_group = run_parser.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
     run_group.add_argument("--file", "-f", type=str, help="Path to a Python script file. Use -- to pass args to script.")
@@ -47,6 +49,13 @@ def main():
     args = parser.parse_args()
 
     if args.command == "run":
+        # Handle --cwd option
+        if args.cwd:
+            if not os.path.isdir(args.cwd):
+                print(f"Error: Directory does not exist: {args.cwd}", file=sys.stderr)
+                sys.exit(1)
+            os.chdir(args.cwd)
+        
         if args.code:
             result = run_code(args.code, capture_output=False)
             if result.output:

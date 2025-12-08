@@ -31,6 +31,12 @@ For simple code without special characters:
 pyx run --code "print('hello')"
 ```
 
+To run in a specific directory (instead of using `cd xxx && ...`):
+
+```bash
+pyx run --cwd "/path/to/dir" --code "print('hello')"
+```
+
 ### 2. Run base64-encoded Python code (RECOMMENDED for complex code)
 
 **IMPORTANT**: When code contains regex, quotes, backslashes, or any special characters, use `--base64` to avoid shell escaping issues:
