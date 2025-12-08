@@ -4,6 +4,7 @@ Provides command line access to the executor functions.
 """
 
 import argparse
+import base64
 import sys
 
 from pyx_core import run_code, run_file, add_package, ensure_temp, list_env_keys
@@ -22,6 +23,7 @@ def main():
     run_group = run_parser.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
     run_group.add_argument("--file", "-f", type=str, help="Path to a Python script file")
+    run_group.add_argument("--base64", "-b", type=str, help="Base64-encoded Python code to execute (avoids shell escaping issues)")
 
     # add command
     add_parser = subparsers.add_parser("add", help="Install a Python package")
@@ -46,6 +48,18 @@ def main():
             sys.exit(0 if result.success else 1)
         elif args.file:
             result = run_file(args.file, capture_output=False)
+            if result.output:
+                print(result.output, end="")
+            if result.error:
+                print(result.error, file=sys.stderr)
+            sys.exit(0 if result.success else 1)
+        elif args.base64:
+            try:
+                code = base64.b64decode(args.base64).decode("utf-8")
+            except Exception as e:
+                print(f"Error decoding base64: {e}", file=sys.stderr)
+                sys.exit(1)
+            result = run_code(code, capture_output=False)
             if result.output:
                 print(result.output, end="")
             if result.error:

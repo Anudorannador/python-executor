@@ -51,6 +51,16 @@ uvx --from /path/to/python-executor python-executor run --code "print('hello')"
 pyx run --code "print('hello from python-executor')"
 ```
 
+### Run base64-encoded code
+
+> **Note**: This feature is primarily designed for **LLM/agent use**, not for humans. LLMs can easily generate base64-encoded code to avoid shell escaping issues.
+
+When code contains regex, quotes, backslashes, or other special characters:
+
+```bash
+pyx run --base64 "aW1wb3J0IHJlCnBhdHRlcm4gPSByJ1xkezN9LVxkezR9JwpwcmludChyZS5tYXRjaChwYXR0ZXJuLCAnMTIzLTQ1NjcnKSk="
+```
+
 ### Run a Python script file
 
 ```bash
