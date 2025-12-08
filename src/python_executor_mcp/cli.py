@@ -6,7 +6,7 @@ Provides command line access to the executor functions.
 import argparse
 import sys
 
-from .executor import run_code, run_file, add_package, ensure_temp
+from .executor import run_code, run_file, add_package, ensure_temp, list_env_keys
 
 
 def main():
@@ -30,6 +30,9 @@ def main():
     # ensure-temp command
     ensure_parser = subparsers.add_parser("ensure-temp", help="Ensure ./temp/ directory exists")
     ensure_parser.add_argument("--dir", "-d", type=str, default="temp", help="Directory to create (default: temp)")
+
+    # list-env command
+    subparsers.add_parser("list-env", help="List environment variable keys from .env file (values hidden)")
 
     args = parser.parse_args()
 
@@ -57,6 +60,13 @@ def main():
         sys.exit(0 if result.success else 1)
     elif args.command == "ensure-temp":
         result = ensure_temp(args.dir)
+        if result.output:
+            print(result.output)
+        if result.error:
+            print(result.error, file=sys.stderr)
+        sys.exit(0 if result.success else 1)
+    elif args.command == "list-env":
+        result = list_env_keys()
         if result.output:
             print(result.output)
         if result.error:

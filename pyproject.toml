@@ -6,27 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mcp[cli]>=1.0.0",
-    "boto3>=1.38.33",
-    "cryptography>=45.0.3",
-    "dateparser>=1.2.1",
-    "exchangelib>=5.5.1",
-    "markdown>=3.8.2",
-    "matplotlib>=3.10.3",
-    "msal>=1.32.3",
-    "numpy>=2.2.6",
-    "openpyxl>=3.1.5",
-    "pandas>=2.2.3",
-    "pillow>=11.2.1",
-    "pymysql>=1.1.1",
-    "pyperclip>=1.9.0",
     "python-dotenv>=1.1.0",
-    "pytz>=2025.2",
-    "pywin32>=310; sys_platform == 'win32'",
-    "redis>=6.2.0",
-    "requests>=2.32.3",
-    "sqlalchemy>=2.0.41",
-    "wrapt>=1.17.2",
-    "xlrd>=2.0.1",
 ]
 
 [project.scripts]

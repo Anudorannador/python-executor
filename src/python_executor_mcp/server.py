@@ -10,7 +10,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from .executor import run_code, run_file, add_package, ensure_temp
+from .executor import run_code, run_file, add_package, ensure_temp, list_env_keys
 
 logger = logging.getLogger("python-executor-mcp")
 
@@ -76,6 +76,15 @@ async def list_tools() -> list[Tool]:
                         "default": "temp"
                     }
                 },
+                "required": []
+            }
+        ),
+        Tool(
+            name="list_env_keys",
+            description="List environment variable keys from .env file in current directory. Only returns key names, not values (to protect secrets). Use this to discover what configuration is available before using os.environ['KEY'] in code.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
                 "required": []
             }
         ),
@@ -145,6 +154,20 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return [TextContent(
                 type="text",
                 text=f"✓ {result.output}"
+            )]
+        else:
+            return [TextContent(
+                type="text",
+                text=f"✗ {result.error}"
+            )]
+    
+    elif name == "list_env_keys":
+        result = list_env_keys()
+        
+        if result.success:
+            return [TextContent(
+                type="text",
+                text=f"✓ Available environment keys:\n{result.output}"
             )]
         else:
             return [TextContent(

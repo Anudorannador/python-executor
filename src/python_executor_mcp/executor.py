@@ -11,6 +11,24 @@ from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+
+# Get the python-executor package root directory (where .env should be)
+_PACKAGE_ROOT = Path(__file__).parent.parent.parent.resolve()
+_GLOBAL_ENV_PATH = _PACKAGE_ROOT / ".env"
+
+
+def _load_all_env():
+    """Load .env files: global (python-executor dir) first, then local (cwd).
+    Local values override global ones.
+    """
+    # Load global .env from python-executor directory
+    if _GLOBAL_ENV_PATH.exists():
+        load_dotenv(_GLOBAL_ENV_PATH, override=False)
+    # Load local .env from current working directory (overrides global)
+    load_dotenv(override=True)
+
 
 @dataclass
 class ExecutionResult:
@@ -31,6 +49,9 @@ def run_code(code: str, capture_output: bool = True) -> ExecutionResult:
     Returns:
         ExecutionResult with success status and output
     """
+    # Load global .env (python-executor dir) + local .env (cwd)
+    _load_all_env()
+    
     if capture_output:
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -68,6 +89,9 @@ def run_file(file_path: str, capture_output: bool = True) -> ExecutionResult:
     Returns:
         ExecutionResult with success status and output
     """
+    # Load global .env (python-executor dir) + local .env (cwd)
+    _load_all_env()
+    
     path = Path(file_path)
     
     if not path.exists():
@@ -200,4 +224,66 @@ def ensure_temp(directory: str = "temp") -> ExecutionResult:
             success=False,
             output="",
             error=f"Error creating directory: {e}"
+        )
+
+
+def _parse_env_keys(env_path: Path) -> list[str]:
+    """Parse .env file and return list of key names."""
+    if not env_path.exists():
+        return []
+    keys = []
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key = line.split("=", 1)[0].strip()
+            if key:
+                keys.append(key)
+    return keys
+
+
+def list_env_keys() -> ExecutionResult:
+    """
+    List environment variable keys from .env files.
+    Merges global .env (python-executor dir) and local .env (cwd).
+    Only returns key names, not values (to avoid exposing secrets).
+    
+    Returns:
+        ExecutionResult with list of key names
+    """
+    local_env_path = Path(".env")
+    
+    try:
+        global_keys = _parse_env_keys(_GLOBAL_ENV_PATH)
+        local_keys = _parse_env_keys(local_env_path)
+        
+        # Build output with sections
+        output_lines = []
+        
+        if global_keys:
+            output_lines.append(f"[Global: {_GLOBAL_ENV_PATH}]")
+            output_lines.extend(global_keys)
+        
+        if local_keys:
+            if output_lines:
+                output_lines.append("")
+            output_lines.append(f"[Local: {local_env_path.resolve()}]")
+            output_lines.extend(local_keys)
+        
+        if not output_lines:
+            return ExecutionResult(
+                success=True,
+                output="No .env files found"
+            )
+        
+        return ExecutionResult(
+            success=True,
+            output="\n".join(output_lines)
+        )
+    except Exception as e:
+        return ExecutionResult(
+            success=False,
+            output="",
+            error=f"Error reading .env file: {e}"
         )
