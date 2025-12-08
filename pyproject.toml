@@ -3,6 +3,7 @@ name = "python-executor-mcp"
 version = "0.1.0"
 description = "A cross-platform Python code executor with MCP server support for LLM integration"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "mcp[cli]>=1.0.0",
