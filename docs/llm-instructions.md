@@ -36,8 +36,10 @@ pyx run --code "print('hello')"
 **IMPORTANT**: When code contains regex, quotes, backslashes, or any special characters, use `--base64` to avoid shell escaping issues:
 
 ```bash
-pyx run --base64 "BASE64_ENCODED_CODE_HERE"
+pyx run --base64 "BASE64_ENCODED_CODE_HERE" -y
 ```
+
+> Note: Use `-y` or `--yes` to skip the confirmation prompt. Without it, the decoded code will be displayed and user confirmation is required.
 
 ### 3. Run a Python script file
 

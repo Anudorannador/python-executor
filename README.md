@@ -58,8 +58,10 @@ pyx run --code "print('hello from python-executor')"
 When code contains regex, quotes, backslashes, or other special characters:
 
 ```bash
-pyx run --base64 "aW1wb3J0IHJlCnBhdHRlcm4gPSByJ1xkezN9LVxkezR9JwpwcmludChyZS5tYXRjaChwYXR0ZXJuLCAnMTIzLTQ1NjcnKSk="
+pyx run --base64 "aW1wb3J0IHJlCnBhdHRlcm4gPSByJ1xkezN9LVxkezR9JwpwcmludChyZS5tYXRjaChwYXR0ZXJuLCAnMTIzLTQ1NjcnKSk=" -y
 ```
+
+Without `-y`, the decoded code will be displayed with syntax highlighting and user confirmation is required before execution.
 
 ### Run a Python script file
 
