@@ -1,4 +1,4 @@
-# python-executor-mcp
+# python-executor CMD & MCP
 
 A cross-platform Python code executor with MCP (Model Context Protocol) server support for LLM integration. All non-trivial actions should be executed via Python code instead of shell pipelines.
 
@@ -33,7 +33,7 @@ uv tool install -e /path/to/python-executor
 uv tool install -e "/path/to/python-executor[full]"
 ```
 
-After installation, you can use `python-executor` from any directory.
+After installation, you can use `python-executor` (or the shortcut `pyx`) from any directory.
 
 **Alternative**: Use `uvx` to run without installing:
 
@@ -43,35 +43,37 @@ uvx --from /path/to/python-executor python-executor run --code "print('hello')"
 
 ## CLI Usage
 
+> **Tip**: `pyx` is a shortcut for `python-executor`. All examples below work with either command.
+
 ### Run inline Python code
 
 ```bash
-python-executor run --code "print('hello from python-executor')"
+pyx run --code "print('hello from python-executor')"
 ```
 
 ### Run a Python script file
 
 ```bash
-python-executor run --file "path/to/script.py"
+pyx run --file "path/to/script.py"
 ```
 
 ### Install a missing package
 
 ```bash
-python-executor add --package "package_name"
+pyx add --package "package_name"
 ```
 
 ### Ensure a directory exists
 
 ```bash
-python-executor ensure-temp
-python-executor ensure-temp --dir "output"
+pyx ensure-temp
+pyx ensure-temp --dir "output"
 ```
 
 ### List available environment variables
 
 ```bash
-python-executor list-env
+pyx list-env
 ```
 
 Shows keys from both global `.env` (in python-executor dir) and local `.env` (in cwd). Values are hidden.

@@ -66,6 +66,7 @@ full = [
 
 [project.scripts]
 python-executor = "python_executor_mcp.cli:main"
+pyx = "python_executor_mcp.cli:main"
 python-executor-mcp = "python_executor_mcp.server:main"
 
 [build-system]
