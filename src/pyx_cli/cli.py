@@ -78,11 +78,13 @@ def main():
                 print(f"Error decoding base64: {e}", file=sys.stderr)
                 sys.exit(1)
             
-            # Show decoded code and ask for confirmation
+            # Always show decoded code
+            console.print("\n[bold yellow]Decoded code:[/bold yellow]")
+            console.print(Syntax(code, "python", theme="monokai", line_numbers=True))
+            console.print()
+            
+            # Ask for confirmation unless -y is specified
             if not args.yes:
-                console.print("\n[bold yellow]Decoded code:[/bold yellow]")
-                console.print(Syntax(code, "python", theme="monokai", line_numbers=True))
-                console.print()
                 if not Confirm.ask("Execute this code?", default=True):
                     console.print("[dim]Cancelled.[/dim]")
                     sys.exit(0)
