@@ -175,7 +175,9 @@ There are two ways to integrate with LLMs:
 
 **Option 2: Instruction Prompt** — Tell LLM to use `pyx` instead of shell commands
 
-Add to VS Code `prompts/global.instructions.md` or system prompt:
+Add to VS Code `prompts/global.instructions.md` or system prompt. See [docs/llm-instructions.md](docs/llm-instructions.md) for a complete example.
+
+Quick version:
 
 ```markdown
 ## Command Execution
@@ -185,6 +187,7 @@ Add to VS Code `prompts/global.instructions.md` or system prompt:
 All commands MUST go through `pyx` (python-executor):
 
 - Run code: `pyx run --code "your_code_here"`
+- Run base64: `pyx run --base64 "BASE64_ENCODED_CODE"` (for complex code)
 - Run file: `pyx run --file "path/to/script.py"`
 - Install package: `pyx add --package "package_name"`
 - List env keys: `pyx list-env`
