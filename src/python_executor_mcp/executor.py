@@ -167,7 +167,7 @@ def run_file(file_path: str, capture_output: bool = True) -> ExecutionResult:
 
 def add_package(package: str) -> ExecutionResult:
     """
-    Install a package using uv.
+    Install a package using uv to optional-dependencies[full].
     
     Args:
         package: Package name to install
@@ -177,10 +177,11 @@ def add_package(package: str) -> ExecutionResult:
     """
     try:
         result = subprocess.run(
-            ["uv", "add", package],
+            ["uv", "add", "--optional", "full", package],
             check=True,
             capture_output=True,
             text=True,
+            cwd=_PACKAGE_ROOT,  # Run in python-executor directory
         )
         output = result.stdout
         if result.stderr:

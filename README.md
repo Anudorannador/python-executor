@@ -127,11 +127,50 @@ Or with uvx (if not installed globally):
 
 ## Why python-executor?
 
-- **Cross-platform**: Works on Windows, macOS, and Linux without shell-specific syntax issues
-- **No shell interpolation**: Avoids `%VAR%`, `$VAR`, `&&`, pipes, and other shell-specific constructs
-- **Pre-installed packages**: Comes with common packages like `requests`, `pandas`, `numpy`, etc.
-- **Consistent behavior**: Same execution model across all platforms
-- **LLM Integration**: MCP server allows LLMs to execute Python code safely
+### The Problem with Shell Commands
+
+When LLMs generate shell commands, they often fail due to:
+
+- **Platform differences**: `%VAR%` (Windows) vs `$VAR` (Unix)
+- **Shell syntax issues**: `&&`, `|`, `>` behave differently across shells
+- **Quoting hell**: Nested quotes, escaping special characters
+- **Missing tools**: `curl`, `jq`, `grep` may not be installed
+
+### The Solution
+
+`python-executor` provides a **single, consistent entrypoint** for all platforms:
+
+```bash
+python-executor run --code "your_python_code_here"
+```
+
+**Benefits:**
+
+- **Cross-platform**: Works on Windows, macOS, and Linux without modification
+- **No shell interpolation**: Avoids `%VAR%`, `$VAR`, `&&`, pipes entirely
+- **Pre-installed packages**: Common packages like `requests`, `pandas`, `redis` ready to use
+- **Environment management**: Auto-loads `.env` files for database/API credentials
+- **LLM-friendly**: MCP server exposes tools that LLMs can call directly
+
+### For LLM/Agent Integration
+
+Instead of generating fragile shell commands, LLMs should:
+
+1. **Run Python code directly**:
+   ```bash
+   python-executor run --code "import requests; print(requests.get('https://api.example.com').json())"
+   ```
+
+2. **Use environment variables for secrets**:
+   ```bash
+   python-executor list-env  # Discover available keys
+   python-executor run --code "import os; print(os.environ['REDIS_URL'])"
+   ```
+
+3. **Install missing packages on demand**:
+   ```bash
+   python-executor add --package "some-package"
+   ```
 
 ## Optional Packages (with `[full]`)
 
