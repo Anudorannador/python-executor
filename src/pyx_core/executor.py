@@ -78,12 +78,13 @@ def run_code(code: str, capture_output: bool = True) -> ExecutionResult:
             return ExecutionResult(success=False, output="", error=str(e))
 
 
-def run_file(file_path: str, capture_output: bool = True) -> ExecutionResult:
+def run_file(file_path: str, script_args: list[str] | None = None, capture_output: bool = True) -> ExecutionResult:
     """
     Execute a Python script file.
     
     Args:
         file_path: Path to the Python script
+        script_args: Arguments to pass to the script (will be set as sys.argv[1:])
         capture_output: If True, capture stdout/stderr; if False, print directly
         
     Returns:
@@ -133,6 +134,10 @@ def run_file(file_path: str, capture_output: bool = True) -> ExecutionResult:
     # Change to script directory for relative imports
     original_cwd = os.getcwd()
     
+    # Save and set sys.argv
+    original_argv = sys.argv
+    sys.argv = [str(path.resolve())] + (script_args or [])
+    
     if capture_output:
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -154,6 +159,7 @@ def run_file(file_path: str, capture_output: bool = True) -> ExecutionResult:
             )
         finally:
             os.chdir(original_cwd)
+            sys.argv = original_argv
     else:
         try:
             os.chdir(path.parent.resolve())
@@ -163,6 +169,7 @@ def run_file(file_path: str, capture_output: bool = True) -> ExecutionResult:
             return ExecutionResult(success=False, output="", error=str(e))
         finally:
             os.chdir(original_cwd)
+            sys.argv = original_argv
 
 
 def add_package(package: str) -> ExecutionResult:

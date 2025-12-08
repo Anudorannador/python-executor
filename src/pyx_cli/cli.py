@@ -28,9 +28,10 @@ def main():
     run_parser = subparsers.add_parser("run", help="Run Python code or a script file")
     run_group = run_parser.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
-    run_group.add_argument("--file", "-f", type=str, help="Path to a Python script file")
+    run_group.add_argument("--file", "-f", type=str, help="Path to a Python script file. Use -- to pass args to script.")
     run_group.add_argument("--base64", "-b", type=str, help="Base64-encoded Python code to execute (avoids shell escaping issues)")
     run_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt for base64 code")
+    run_parser.add_argument("script_args", nargs="*", help="Arguments to pass to the script (after --)")
 
     # add command
     add_parser = subparsers.add_parser("add", help="Install a Python package")
@@ -54,7 +55,8 @@ def main():
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)
         elif args.file:
-            result = run_file(args.file, capture_output=False)
+            script_args = args.script_args if hasattr(args, 'script_args') else []
+            result = run_file(args.file, script_args=script_args, capture_output=False)
             if result.output:
                 print(result.output, end="")
             if result.error:
