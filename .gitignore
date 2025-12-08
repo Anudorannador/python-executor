@@ -12,6 +12,7 @@ wheels/
 # Environment variable files
 .env
 .env.*
+!.env.example
 
 temp/
 uv.lock

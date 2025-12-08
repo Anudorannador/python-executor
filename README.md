@@ -1,147 +1,10 @@
-# python-executor CMD & MCP
+# python-executor (pyx)
 
-A cross-platform Python code executor with MCP (Model Context Protocol) server support for LLM integration. All non-trivial actions should be executed via Python code instead of shell pipelines.
-
-## Features
-
-- **CLI Mode**: Command line interface for direct execution
-- **MCP Server Mode**: Expose tools for LLMs to execute Python code safely
-- **Cross-platform**: Works on Windows, macOS, and Linux
-- **Pre-installed packages**: Common packages like `requests`, `pandas`, `numpy`, etc.
-
-## Installation
-
-Install as a global tool (core only):
-
-```bash
-uv tool install /path/to/python-executor
-```
-
-Install with all optional packages:
-
-```bash
-uv tool install "/path/to/python-executor[full]"
-```
-
-For development (editable mode):
-
-```bash
-# Core only
-uv tool install -e /path/to/python-executor
-
-# With all packages
-uv tool install -e "/path/to/python-executor[full]"
-```
-
-After installation, you can use `python-executor` (or the shortcut `pyx`) from any directory.
-
-**Alternative**: Use `uvx` to run without installing:
-
-```bash
-uvx --from /path/to/python-executor python-executor run --code "print('hello')"
-```
-
-## CLI Usage
-
-> **Tip**: `pyx` is a shortcut for `python-executor`. All examples below work with either command.
-
-### Run inline Python code
-
-```bash
-pyx run --code "print('hello from python-executor')"
-```
-
-### Run base64-encoded code
-
-> **Note**: This feature is primarily designed for **LLM/agent use**, not for humans. LLMs can easily generate base64-encoded code to avoid shell escaping issues.
-
-When code contains regex, quotes, backslashes, or other special characters:
-
-```bash
-pyx run --base64 "aW1wb3J0IHJlCnBhdHRlcm4gPSByJ1xkezN9LVxkezR9JwpwcmludChyZS5tYXRjaChwYXR0ZXJuLCAnMTIzLTQ1NjcnKSk=" -y
-```
-
-Without `-y`, the decoded code will be displayed with syntax highlighting and user confirmation is required before execution.
-
-### Run a Python script file
-
-```bash
-pyx run --file "path/to/script.py"
-```
-
-### Install a missing package
-
-```bash
-pyx add --package "package_name"
-```
-
-### Ensure a directory exists
-
-```bash
-pyx ensure-temp
-pyx ensure-temp --dir "output"
-```
-
-### List available environment variables
-
-```bash
-pyx list-env
-```
-
-Shows keys from both global `.env` (in python-executor dir) and local `.env` (in cwd). Values are hidden.
-
-## MCP Server Usage
-
-### Start the MCP server
-
-```bash
-python-executor-mcp
-```
-
-### VS Code MCP Configuration
-
-Add to your VS Code settings (`settings.json`):
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "python-executor": {
-        "command": "python-executor-mcp"
-      }
-    }
-  }
-}
-```
-
-Or with uvx (if not installed globally):
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "python-executor": {
-        "command": "uvx",
-        "args": ["--from", "/path/to/python-executor", "python-executor-mcp"]
-      }
-    }
-  }
-}
-```
-
-### Available MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `run_python_code` | Execute inline Python code |
-| `run_python_file` | Execute a Python script file |
-| `install_package` | Install a Python package using uv |
-| `ensure_directory` | Ensure a directory exists |
-| `list_env_keys` | List environment variable keys from .env files |
+A cross-platform Python code executor for LLM/Agent integration — replaces shell commands with Python to avoid escaping and compatibility issues.
 
 ## Why python-executor?
 
-When LLMs generate shell commands, they often fail. `python-executor` solves this:
+When LLMs generate shell commands, they often fail due to platform differences:
 
 | Problem | Shell | python-executor |
 |---------|-------|-----------------|
@@ -151,17 +14,57 @@ When LLMs generate shell commands, they often fail. `python-executor` solves thi
 | Missing tools | `curl`, `jq`, `grep` | Pre-installed packages |
 | Environment | Manual setup | Auto-loads `.env` files |
 
-**Single entrypoint for all platforms:**
+## Quick Start (Local Development)
+
+> **Note**: This tool is designed for local development. Use editable mode so you can customize packages and `.env` configuration.
 
 ```bash
-pyx run --code "your_python_code_here"
+# Clone and install (editable mode with all packages)
+git clone https://github.com/Anudorannador/python-executor.git
+cd python-executor
+uv tool install -e ".[full]"
+
+# Create your .env file for database/API credentials
+cp .env.example .env
+# Edit .env with your credentials
+
+# Verify installation
+pyx list-env
+pyx run --code "print('hello')"
 ```
 
-### For LLM/Agent Integration
+After installation, `pyx` (or `python-executor`) is available globally from any directory.
 
-There are two ways to integrate with LLMs:
+## CLI Usage
 
-**Option 1: MCP Server** — LLM calls tools directly via MCP protocol
+| Command | Description |
+|---------|-------------|
+| `pyx run --code "..."` | Run inline Python code |
+| `pyx run --base64 "..." [-y]` | Run base64-encoded code (for complex code) |
+| `pyx run --file "path.py"` | Run a Python script file |
+| `pyx add --package "name"` | Install a package to optional dependencies |
+| `pyx list-env` | List available environment variable keys |
+| `pyx ensure-temp` | Ensure temp directory exists |
+
+### Handling Special Characters
+
+When code contains regex, quotes, or backslashes, use `--base64` to avoid shell escaping:
+
+```bash
+# Without -y: shows decoded code and asks for confirmation
+pyx run --base64 "cHJpbnQoJ2hlbGxvJyk="
+
+# With -y: skip confirmation (for automation/LLM use)
+pyx run --base64 "cHJpbnQoJ2hlbGxvJyk=" -y
+```
+
+> **Note**: `--base64` is primarily designed for **LLM/agent use**. LLMs generate base64 to avoid shell issues.
+
+## LLM/Agent Integration
+
+### Option 1: MCP Server
+
+Add to VS Code `settings.json`:
 
 ```json
 {
@@ -175,60 +78,89 @@ There are two ways to integrate with LLMs:
 }
 ```
 
-**Option 2: Instruction Prompt** — Tell LLM to use `pyx` instead of shell commands
+**Available MCP Tools:**
 
-Add to VS Code `prompts/global.instructions.md` or system prompt. See [docs/llm-instructions.md](docs/llm-instructions.md) for a complete example.
+| Tool | Description |
+|------|-------------|
+| `run_python_code` | Execute inline Python code |
+| `run_python_file` | Execute a Python script file |
+| `install_package` | Install a Python package |
+| `ensure_directory` | Ensure a directory exists |
+| `list_env_keys` | List environment variable keys |
 
-Quick version:
+### Option 2: Instruction Prompt
+
+Tell LLM to use `pyx` instead of shell commands. See [docs/llm-instructions.md](docs/llm-instructions.md) for a complete example.
+
+Quick version — add to VS Code `prompts/global.instructions.md`:
 
 ```markdown
-## Command Execution
+**IMPORTANT: Avoid shell commands. Use python-executor instead.**
 
-**IMPORTANT: Avoid shell commands to prevent cross-platform failures.**
-
-All commands MUST go through `pyx` (python-executor):
-
-- Run code: `pyx run --code "your_code_here"`
-- Run base64: `pyx run --base64 "BASE64_ENCODED_CODE"` (for complex code)
-- Run file: `pyx run --file "path/to/script.py"`
-- Install package: `pyx add --package "package_name"`
-- List env keys: `pyx list-env`
-
-Do NOT use shell-specific syntax like `%VAR%`, `$VAR`, `&&`, or pipes.
+- Run code: `pyx run --code "..."`
+- Run base64: `pyx run --base64 "..." -y` (for complex code)
+- Run file: `pyx run --file "path.py"`
+- Install: `pyx add --package "name"`
+- List env: `pyx list-env`
 ```
 
-## Optional Packages (with `[full]`)
+## Environment Variables
 
-Install with `uv tool install "/path/to/python-executor[full]"` to get:
+Create `.env` in the python-executor directory for global config (e.g., database URLs):
 
-**AWS**: boto3  
-**Security**: cryptography  
-**Date/Time**: dateparser, arrow, pytz  
-**Microsoft**: exchangelib, msal  
-**Data Processing**: numpy, pandas, orjson, pydantic  
-**Excel/Office**: openpyxl, xlrd, xlsxwriter, python-docx, pypdf  
-**Database**: pymysql, redis, sqlalchemy  
-**HTTP/Network**: requests, httpx, aiohttp, paramiko  
-**Web Scraping**: beautifulsoup4, lxml, chardet  
-**Text/Markdown**: markdown, jinja2, pyyaml  
-**Image**: pillow, matplotlib  
-**CLI/Display**: rich, tabulate, tqdm  
-**Utilities**: pyperclip, wrapt, pywin32 (Windows)
+```bash
+# .env
+MYSQL_URL=mysql+pymysql://user:pass@host/db
+REDIS_URL=redis://:password@host:6379/0
+```
+
+Use in code:
+
+```python
+import os
+url = os.environ['MYSQL_URL']
+```
+
+The `.env` file is auto-loaded. Use `pyx list-env` to see available keys (values hidden).
+
+## Optional Packages
+
+Core installation includes only `mcp[cli]`, `python-dotenv`, and `rich`.
+
+Install with `[full]` for additional packages:
+
+```bash
+uv tool install -e ".[full]"
+```
+
+**Included in `[full]`:**
+
+| Category | Packages |
+|----------|----------|
+| AWS | boto3 |
+| Database | pymysql, redis, sqlalchemy |
+| Data | numpy, pandas, orjson, pydantic |
+| HTTP | requests, httpx, aiohttp, paramiko |
+| Excel/Office | openpyxl, xlrd, xlsxwriter, python-docx, pypdf |
+| Web Scraping | beautifulsoup4, lxml, chardet |
+| CLI/Display | tabulate, tqdm |
+| Image | pillow, matplotlib |
+| Text | markdown, jinja2, pyyaml |
+| Security | cryptography |
+| Date/Time | dateparser, arrow, pytz |
+| Microsoft | exchangelib, msal |
+| Utilities | pyperclip, wrapt, pywin32 (Windows) |
 
 ## Project Structure
 
 ```
 python-executor/
+├── .env              # Your local config (gitignored)
 ├── pyproject.toml
-├── README.md
+├── docs/
+│   └── llm-instructions.md
 └── src/
-    ├── pyx_core/         # Core execution functions (shared)
-    │   ├── __init__.py
-    │   └── executor.py
-    ├── pyx_cli/          # CLI interface
-    │   ├── __init__.py
-    │   └── cli.py
-    └── pyx_mcp/          # MCP server
-        ├── __init__.py
-        └── server.py
+    ├── pyx_core/     # Core execution functions
+    ├── pyx_cli/      # CLI interface
+    └── pyx_mcp/      # MCP server
 ```
