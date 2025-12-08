@@ -20,7 +20,7 @@ uv tool install /path/to/python-executor
 Install with all optional packages:
 
 ```bash
-uv tool install --with python-executor-mcp[full] /path/to/python-executor
+uv tool install "/path/to/python-executor[full]"
 ```
 
 For development (editable mode):
@@ -30,10 +30,16 @@ For development (editable mode):
 uv tool install -e /path/to/python-executor
 
 # With all packages
-uv tool install -e --with python-executor-mcp[full] /path/to/python-executor
+uv tool install -e "/path/to/python-executor[full]"
 ```
 
 After installation, you can use `python-executor` from any directory.
+
+**Alternative**: Use `uvx` to run without installing:
+
+```bash
+uvx --from /path/to/python-executor python-executor run --code "print('hello')"
+```
 
 ## CLI Usage
 
@@ -129,7 +135,7 @@ Or with uvx (if not installed globally):
 
 ## Optional Packages (with `[full]`)
 
-Install with `uv tool install --with python-executor-mcp[full]` to get:
+Install with `uv tool install "/path/to/python-executor[full]"` to get:
 
 **AWS**: boto3  
 **Security**: cryptography  
