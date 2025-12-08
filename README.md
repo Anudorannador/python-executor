@@ -11,16 +11,26 @@ A cross-platform Python code executor with MCP (Model Context Protocol) server s
 
 ## Installation
 
-Install as a global tool from local path:
+Install as a global tool (core only):
 
 ```bash
 uv tool install /path/to/python-executor
 ```
 
-For development (editable mode - changes take effect immediately):
+Install with all optional packages:
 
 ```bash
+uv tool install --with python-executor-mcp[full] /path/to/python-executor
+```
+
+For development (editable mode):
+
+```bash
+# Core only
 uv tool install -e /path/to/python-executor
+
+# With all packages
+uv tool install -e --with python-executor-mcp[full] /path/to/python-executor
 ```
 
 After installation, you can use `python-executor` from any directory.
@@ -51,6 +61,14 @@ python-executor add --package "package_name"
 python-executor ensure-temp
 python-executor ensure-temp --dir "output"
 ```
+
+### List available environment variables
+
+```bash
+python-executor list-env
+```
+
+Shows keys from both global `.env` (in python-executor dir) and local `.env` (in cwd). Values are hidden.
 
 ## MCP Server Usage
 
@@ -99,6 +117,7 @@ Or with uvx (if not installed globally):
 | `run_python_file` | Execute a Python script file |
 | `install_package` | Install a Python package using uv |
 | `ensure_directory` | Ensure a directory exists |
+| `list_env_keys` | List environment variable keys from .env files |
 
 ## Why python-executor?
 
@@ -108,29 +127,23 @@ Or with uvx (if not installed globally):
 - **Consistent behavior**: Same execution model across all platforms
 - **LLM Integration**: MCP server allows LLMs to execute Python code safely
 
-## Pre-installed Packages
+## Optional Packages (with `[full]`)
 
-- boto3
-- cryptography
-- dateparser
-- exchangelib
-- markdown
-- matplotlib
-- msal
-- numpy
-- openpyxl
-- pandas
-- pillow
-- pymysql
-- pyperclip
-- python-dotenv
-- pytz
-- pywin32 (Windows only)
-- redis
-- requests
-- sqlalchemy
-- wrapt
-- xlrd
+Install with `uv tool install --with python-executor-mcp[full]` to get:
+
+**AWS**: boto3  
+**Security**: cryptography  
+**Date/Time**: dateparser, arrow, pytz  
+**Microsoft**: exchangelib, msal  
+**Data Processing**: numpy, pandas, orjson, pydantic  
+**Excel/Office**: openpyxl, xlrd, xlsxwriter, python-docx, pypdf  
+**Database**: pymysql, redis, sqlalchemy  
+**HTTP/Network**: requests, httpx, aiohttp, paramiko  
+**Web Scraping**: beautifulsoup4, lxml, chardet  
+**Text/Markdown**: markdown, jinja2, pyyaml  
+**Image**: pillow, matplotlib  
+**CLI/Display**: rich, tabulate, tqdm  
+**Utilities**: pyperclip, wrapt, pywin32 (Windows)
 
 ## Project Structure
 
