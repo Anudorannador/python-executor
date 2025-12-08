@@ -129,50 +129,58 @@ Or with uvx (if not installed globally):
 
 ## Why python-executor?
 
-### The Problem with Shell Commands
+When LLMs generate shell commands, they often fail. `python-executor` solves this:
 
-When LLMs generate shell commands, they often fail due to:
+| Problem | Shell | python-executor |
+|---------|-------|-----------------|
+| Platform variables | `%VAR%` vs `$VAR` | `os.environ['VAR']` |
+| Command chaining | `&&`, `\|`, `>` differ | Python control flow |
+| Quoting/escaping | Nested quotes hell | Native strings |
+| Missing tools | `curl`, `jq`, `grep` | Pre-installed packages |
+| Environment | Manual setup | Auto-loads `.env` files |
 
-- **Platform differences**: `%VAR%` (Windows) vs `$VAR` (Unix)
-- **Shell syntax issues**: `&&`, `|`, `>` behave differently across shells
-- **Quoting hell**: Nested quotes, escaping special characters
-- **Missing tools**: `curl`, `jq`, `grep` may not be installed
-
-### The Solution
-
-`python-executor` provides a **single, consistent entrypoint** for all platforms:
+**Single entrypoint for all platforms:**
 
 ```bash
-python-executor run --code "your_python_code_here"
+pyx run --code "your_python_code_here"
 ```
-
-**Benefits:**
-
-- **Cross-platform**: Works on Windows, macOS, and Linux without modification
-- **No shell interpolation**: Avoids `%VAR%`, `$VAR`, `&&`, pipes entirely
-- **Pre-installed packages**: Common packages like `requests`, `pandas`, `redis` ready to use
-- **Environment management**: Auto-loads `.env` files for database/API credentials
-- **LLM-friendly**: MCP server exposes tools that LLMs can call directly
 
 ### For LLM/Agent Integration
 
-Instead of generating fragile shell commands, LLMs should:
+There are two ways to integrate with LLMs:
 
-1. **Run Python code directly**:
-   ```bash
-   python-executor run --code "import requests; print(requests.get('https://api.example.com').json())"
-   ```
+**Option 1: MCP Server** — LLM calls tools directly via MCP protocol
 
-2. **Use environment variables for secrets**:
-   ```bash
-   python-executor list-env  # Discover available keys
-   python-executor run --code "import os; print(os.environ['REDIS_URL'])"
-   ```
+```json
+{
+  "mcp": {
+    "servers": {
+      "python-executor": {
+        "command": "pyx-mcp"
+      }
+    }
+  }
+}
+```
 
-3. **Install missing packages on demand**:
-   ```bash
-   python-executor add --package "some-package"
-   ```
+**Option 2: Instruction Prompt** — Tell LLM to use `pyx` instead of shell commands
+
+Add to VS Code `prompts/global.instructions.md` or system prompt:
+
+```markdown
+## Command Execution
+
+**IMPORTANT: Avoid shell commands to prevent cross-platform failures.**
+
+All commands MUST go through `pyx` (python-executor):
+
+- Run code: `pyx run --code "your_code_here"`
+- Run file: `pyx run --file "path/to/script.py"`
+- Install package: `pyx add --package "package_name"`
+- List env keys: `pyx list-env`
+
+Do NOT use shell-specific syntax like `%VAR%`, `$VAR`, `&&`, or pipes.
+```
 
 ## Optional Packages (with `[full]`)
 
