@@ -11,7 +11,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
 
 # Get the python-executor package root directory (where .env should be)
@@ -228,20 +228,11 @@ def ensure_temp(directory: str = "temp") -> ExecutionResult:
         )
 
 
-def _parse_env_keys(env_path: Path) -> list[str]:
-    """Parse .env file and return list of key names."""
+def _get_env_keys(env_path: Path) -> list[str]:
+    """Get environment variable keys from .env file using dotenv_values."""
     if not env_path.exists():
         return []
-    keys = []
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" in line:
-            key = line.split("=", 1)[0].strip()
-            if key:
-                keys.append(key)
-    return keys
+    return list(dotenv_values(env_path).keys())
 
 
 def list_env_keys() -> ExecutionResult:
@@ -256,8 +247,8 @@ def list_env_keys() -> ExecutionResult:
     local_env_path = Path(".env")
     
     try:
-        global_keys = _parse_env_keys(_GLOBAL_ENV_PATH)
-        local_keys = _parse_env_keys(local_env_path)
+        global_keys = _get_env_keys(_GLOBAL_ENV_PATH)
+        local_keys = _get_env_keys(local_env_path)
         
         # Build output with sections
         output_lines = []
