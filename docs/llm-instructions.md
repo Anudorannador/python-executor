@@ -55,9 +55,11 @@ pyx add --package "package_name"
 
 ### 5. Ensure a directory exists
 
+Create a directory for storing temporary files, scripts, data, etc.:
+
 ```bash
-pyx ensure-temp
-pyx ensure-temp --dir "output"
+pyx ensure-temp                  # Creates ./temp/
+pyx ensure-temp --dir "output"   # Creates ./output/
 ```
 
 ### 6. List available environment keys
