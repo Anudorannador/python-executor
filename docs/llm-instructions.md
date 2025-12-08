@@ -36,19 +36,7 @@ pyx run --code "print('hello')"
 **IMPORTANT**: When code contains regex, quotes, backslashes, or any special characters, use `--base64` to avoid shell escaping issues:
 
 ```bash
-# First encode the code to base64, then run:
 pyx run --base64 "BASE64_ENCODED_CODE_HERE"
-```
-
-To generate base64-encoded code:
-```python
-import base64
-code = '''
-import re
-pattern = r'\d{3}-\d{4}'
-print(re.match(pattern, '123-4567'))
-'''
-print(base64.b64encode(code.encode()).decode())
 ```
 
 ### 3. Run a Python script file
