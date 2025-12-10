@@ -1,7 +1,7 @@
-# LLM Instructions for python-executor
-
-**Copy this to your VS Code `prompts/global.instructions.md` or system prompt.**
-
+---
+applyTo: "**"
+name: "llm-instructions"
+description: "Instructions for LLMs/Agents to use `pyx` instead of raw shell commands."
 ---
 
 ## Why Use pyx Instead of Shell Commands?
