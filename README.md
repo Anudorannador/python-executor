@@ -97,7 +97,24 @@ Add to VS Code `settings.json`:
 | `run_python_file` | Execute a Python script file (supports `timeout`) |
 | `install_package` | Install a Python package |
 | `ensure_directory` | Ensure a directory exists |
-| `get_environment_info` | Get OS, shell syntax, env keys, available commands |
+| `get_environment_info` | Get OS, shell syntax, env keys, available commands (111 tools) |
+
+**Commands checked by `pyx info --commands`:**
+
+| Category | Commands |
+|----------|----------|
+| VCS | git, svn, hg |
+| Package (Lang) | npm, yarn, pip, uv, cargo, go, composer, gem, maven, gradle... |
+| Package (System) | brew, apt, yum, pacman, choco, scoop, winget... |
+| Containers & Cloud | docker, podman, kubectl, helm, terraform, aws, az, gcloud |
+| Languages | python, node, java, go, rustc, ruby, php, perl, dotnet |
+| Build | make, cmake, ninja, msbuild, gcc, clang |
+| Network | curl, wget, ssh, scp, rsync, ping, nmap |
+| Database | mysql, psql, sqlite3, mongosh, redis-cli |
+| Text | grep, sed, awk, jq, yq, rg, fd |
+| File | tar, zip, unzip, 7z, gzip, xz |
+| Editors | code, vim, nvim, nano, emacs |
+| Utils | ffmpeg, convert, pandoc, gh, htop, tree, find... |
 
 ### Option 2: Instruction Prompt
 

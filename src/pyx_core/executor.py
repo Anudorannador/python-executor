@@ -21,13 +21,12 @@ from typing import Any
 
 from dotenv import load_dotenv, dotenv_values
 
+from .constants import SHELL_SYNTAX, COMMON_COMMANDS, ALL_COMMANDS, DEFAULT_TIMEOUT
+
 
 # Get the python-executor package root directory (where .env should be)
 _PACKAGE_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
 _GLOBAL_ENV_PATH: Path = _PACKAGE_ROOT / ".env"
-
-# Default timeout in seconds (None = no timeout)
-DEFAULT_TIMEOUT: float | None = None
 
 
 def _load_all_env() -> None:
@@ -593,98 +592,6 @@ def _get_env_keys(env_path: Path) -> list[str]:
     return list(dotenv_values(env_path).keys())
 
 
-# Shell syntax definitions for different shells
-SHELL_SYNTAX: dict[str, dict[str, str]] = {
-    "powershell": {
-        "variable": "$env:VAR or $VAR",
-        "chaining_always": "cmd1; cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "*>",
-        "background": "Start-Process cmd",
-        "path_separator": "\\ (also /)",
-        "escape_char": "`",
-        "string_literal": "'...'",
-        "string_interpolated": '"..."',
-        "command_substitution": "$(cmd)",
-        "null_device": "$null",
-        "home_dir": "$HOME",
-        "line_continuation": "`",
-        "comment": "#",
-    },
-    "cmd": {
-        "variable": "%VAR%",
-        "chaining_always": "cmd1 & cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "> file 2>&1",
-        "background": "start /b cmd",
-        "path_separator": "\\",
-        "escape_char": "^",
-        "string_literal": "N/A",
-        "string_interpolated": '"..."',
-        "command_substitution": "for /f",
-        "null_device": "NUL",
-        "home_dir": "%USERPROFILE%",
-        "line_continuation": "^",
-        "comment": "REM or ::",
-    },
-    "bash": {
-        "variable": "$VAR",
-        "chaining_always": "cmd1; cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "&> or 2>&1",
-        "background": "cmd &",
-        "path_separator": "/",
-        "escape_char": "\\",
-        "string_literal": "'...'",
-        "string_interpolated": '"..."',
-        "command_substitution": "$(cmd)",
-        "null_device": "/dev/null",
-        "home_dir": "$HOME or ~",
-        "line_continuation": "\\",
-        "comment": "#",
-    },
-    "zsh": {
-        "variable": "$VAR",
-        "chaining_always": "cmd1; cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "&> or 2>&1",
-        "background": "cmd &",
-        "path_separator": "/",
-        "escape_char": "\\",
-        "string_literal": "'...'",
-        "string_interpolated": '"..."',
-        "command_substitution": "$(cmd)",
-        "null_device": "/dev/null",
-        "home_dir": "$HOME or ~",
-        "line_continuation": "\\",
-        "comment": "#",
-    },
-}
-
-# Common commands to check for availability
-COMMON_COMMANDS: list[str] = [
-    "git", "curl", "wget", "docker", "node", "npm", "npx",
-    "uv", "pip", "cargo", "go", "java", "make", "cmake",
-    "gcc", "clang", "code", "vim", "nano", "ssh", "scp",
-]
-
-
 def _detect_shell() -> tuple[str, str]:
     """Detect the current shell type and path.
     
@@ -752,7 +659,7 @@ def _check_commands() -> dict[str, dict[str, Any]]:
     import shutil
     
     results: dict[str, dict[str, Any]] = {}
-    for cmd in COMMON_COMMANDS:
+    for cmd in ALL_COMMANDS:
         path = shutil.which(cmd)
         if path:
             version = _get_command_version(cmd)

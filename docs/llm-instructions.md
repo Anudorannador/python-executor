@@ -1,118 +1,158 @@
 # LLM Instructions for python-executor
 
-This is an example instruction file for LLMs/agents. Copy or adapt this to your VS Code `prompts/global.instructions.md` or system prompt.
+**Copy this to your VS Code `prompts/global.instructions.md` or system prompt.**
 
 ---
 
-## Command with Python
+## Why Use pyx Instead of Shell Commands?
 
-**IMPORTANT: Avoid shell commands to prevent cross-platform failures.  
-All non-trivial actions MUST be executed via Python code, not via shell pipelines.  
-Do NOT rely on shell-specific syntax (e.g. `%VAR%`, `$VAR`, `&&`, pipes).**
+Shell commands fail across platforms. Use `pyx` to avoid these problems:
 
-All commands MUST go through a single entrypoint:
+| Problem | ❌ Shell (fails) | ✅ pyx (works) |
+|---------|-----------------|----------------|
+| **Variables** | `%VAR%` (Windows) vs `$VAR` (Unix) | `pyx run --code "import os; print(os.environ['VAR'])"` |
+| **Chaining** | `&&` / `&` / `;` differ by shell | `pyx run --code "func1(); func2()"` |
+| **Quoting** | Nested `"` `'` `` ` `` hell | `pyx run --base64 "..." -y` |
+| **Missing tools** | `curl`, `jq`, `grep` not on Windows | Use `requests`, `json`, Python stdlib |
+| **Escaping** | `\` vs `^` vs `` ` `` | Native Python strings |
 
-```bash
-pyx ...
-```
+---
 
-The `pyx` tool (python-executor) is responsible for:
+## Golden Rule
 
-- Managing its own Python environment and dependencies.
-- Running Python code (inline, base64-encoded, or from files).
-- Installing additional packages when needed.
-- Performing filesystem or helper tasks (for example, creating a `temp` directory).
-- Providing environment information (OS, shell syntax, available commands).
-
-### 0. Get environment information (RECOMMENDED first step)
-
-Before running commands, understand the current environment:
+**NEVER generate raw shell commands. ALWAYS use `pyx`.**
 
 ```bash
-pyx info              # Full info: OS, shell syntax, env keys, commands
-pyx info --system     # Only system info (OS, shell, Python version)
-pyx info --syntax     # Only shell syntax reference
-pyx info --env        # Only environment variable keys
-pyx info --commands   # Only available commands check
-pyx info --json       # JSON output for programmatic use
+# ❌ WRONG - Will fail on some platforms
+curl -s https://api.example.com | jq '.data'
+echo %USERNAME%
+cd /path && npm install
+
+# ✅ CORRECT - Works everywhere
+pyx run --code "import requests; print(requests.get('https://api.example.com').json()['data'])"
+pyx run --code "import os; print(os.environ['USERNAME'])"
+pyx run --cwd "/path" --code "import subprocess; subprocess.run(['npm', 'install'])"
 ```
 
-The output includes:
-- **System**: OS type/version, shell type, Python version
-- **Shell Syntax**: How to reference variables, chain commands, redirect output, etc.
-- **Environment Keys**: Available `.env` keys (values hidden for security)
-- **Available Commands**: Which tools are installed (git, curl, docker, etc.)
+---
 
-### 1. Run inline Python code
+## Quick Reference
 
-For simple code without special characters:
+| Task | Command |
+|------|---------|
+| **Check environment first** | `pyx info` |
+| **Run simple code** | `pyx run --code "print('hello')"` |
+| **Run complex code** | `pyx run --base64 "BASE64_CODE" -y` |
+| **Run in directory** | `pyx run --cwd "/path" --code "..."` |
+| **Run with timeout** | `pyx run --code "..." --timeout 30` |
+| **Run async code** | `pyx run --code "await ..." --async` |
+| **Run script file** | `pyx run --file "script.py"` |
+| **Install package** | `pyx add --package "requests"` |
+| **Create directory** | `pyx ensure-temp --dir "output"` |
+
+---
+
+## How to Solve Common Problems
+
+### 1. Environment Variables
 
 ```bash
-pyx run --code "print('hello')"
+# ❌ Shell - platform dependent
+echo %PATH%          # Windows CMD
+echo $PATH           # Unix
+$env:PATH            # PowerShell
+
+# ✅ pyx - works everywhere
+pyx run --code "import os; print(os.environ['PATH'])"
 ```
 
-To run in a specific directory (instead of using `cd xxx && ...`):
+### 2. HTTP Requests
 
 ```bash
-pyx run --cwd "/path/to/dir" --code "print('hello')"
+# ❌ Shell - curl may not exist on Windows
+curl -X POST https://api.example.com -d '{"key": "value"}'
+
+# ✅ pyx - requests is pre-installed
+pyx run --code "import requests; r = requests.post('https://api.example.com', json={'key': 'value'}); print(r.json())"
 ```
 
-To run with a timeout (prevents infinite loops):
+### 3. JSON Processing
 
 ```bash
-pyx run --code "..." --timeout 30
+# ❌ Shell - jq not available everywhere
+cat data.json | jq '.items[] | .name'
+
+# ✅ pyx - Python stdlib
+pyx run --code "import json; data = json.load(open('data.json')); print([x['name'] for x in data['items']])"
 ```
 
-To run async code with top-level await:
+### 4. File Operations
 
 ```bash
-pyx run --code "import asyncio; await asyncio.sleep(1); print('done')" --async
+# ❌ Shell - different commands per OS
+dir /s *.py          # Windows
+find . -name "*.py"  # Unix
+
+# ✅ pyx - pathlib works everywhere
+pyx run --code "from pathlib import Path; print(list(Path('.').rglob('*.py')))"
 ```
 
-### 2. Run base64-encoded Python code (RECOMMENDED for complex code)
+### 5. Complex Code with Special Characters
 
-**IMPORTANT**: When code contains regex, quotes, backslashes, or any special characters, use `--base64` to avoid shell escaping issues:
+When code contains `"`, `'`, `\`, regex, or newlines:
 
 ```bash
-pyx run --base64 "BASE64_ENCODED_CODE_HERE" -y
+# ❌ Shell - escaping nightmare
+python -c "import re; print(re.findall(r'\"([^\"]+)\"', open('file.txt').read()))"
+
+# ✅ pyx - encode as base64, no escaping needed
+pyx run --base64 "aW1wb3J0IHJlCnByaW50KHJlLmZpbmRhbGwocidcIihbXlwiXSspXCInLCBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKSkp" -y
 ```
 
-> Note: Use `-y` or `--yes` to skip the confirmation prompt. Without it, the decoded code will be displayed and user confirmation is required.
-
-### 3. Run a Python script file
+### 6. Command Chaining
 
 ```bash
-pyx run --file "path/to/script.py"
+# ❌ Shell - && behavior differs
+cd /project && npm install && npm run build
+
+# ✅ pyx - Python control flow
+pyx run --cwd "/project" --code "
+import subprocess
+subprocess.run(['npm', 'install'], check=True)
+subprocess.run(['npm', 'run', 'build'], check=True)
+"
 ```
 
-### 4. Install a missing package
+---
+
+## Before You Start: Run `pyx info`
+
+Always check the environment first:
 
 ```bash
-pyx add --package "package_name"
+pyx info
 ```
 
-### 5. Ensure a directory exists
+This tells you:
+- **OS & Shell**: What platform you're on, what shell syntax to use if needed
+- **Available Commands**: Which tools exist (git, docker, node, etc.)
+- **Environment Keys**: What `.env` variables are available
 
-Create a directory for storing temporary files, scripts, data, etc.:
+Use `pyx info --json` for programmatic parsing.
 
-```bash
-pyx ensure-temp                  # Creates ./temp/
-pyx ensure-temp --dir "output"   # Creates ./output/
-```
+---
 
-### Requirements for tools / agents
+## Rules for LLM/Agent
 
-- **Start with `pyx info`** to understand the environment before running commands.
-- Always use `pyx ...` for any command that would otherwise use a shell.
-- **Use `--base64` for any code containing special characters** (regex, quotes, backslashes, newlines).
-- **Use `--timeout` for potentially long-running operations** to prevent hanging.
-- **Use `--async` for code with async/await** (aiohttp, asyncio, etc.).
-- Do NOT generate raw shell commands or `uv run --project ...`.
-- When invoking `pyx` programmatically, construct an argument list:
-
-    ```text
-    ["pyx", "run", "--base64", base64_encoded_code, "--timeout", "60"]
-    ```
-
-- Execute **without** shell interpolation (no `shell = true`).
-- Any machine-specific details MUST be handled inside `pyx` configuration, **not** by editing this global file.
+1. **NEVER** use raw shell commands (`curl`, `grep`, `echo`, etc.)
+2. **ALWAYS** use `pyx run --code "..."` or `pyx run --base64 "..." -y`
+3. **USE** `--base64` for any code with special characters
+4. **USE** `--timeout` for potentially long operations
+5. **USE** `--cwd` instead of `cd && ...`
+6. **CHECK** `pyx info` if unsure about the environment
+7. **USE** Python libraries instead of shell tools:
+   - `requests` instead of `curl`
+   - `json` module instead of `jq`
+   - `pathlib` instead of `find`/`dir`
+   - `shutil` instead of `cp`/`mv`/`rm`
+   - `os.environ` instead of `echo $VAR`
