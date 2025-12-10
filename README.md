@@ -29,7 +29,7 @@ cp .env.example .env
 # Edit .env with your credentials
 
 # Verify installation
-pyx list-env
+pyx info
 pyx run --code "print('hello')"
 ```
 
@@ -39,13 +39,21 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 
 | Command | Description |
 |---------|-------------|
+| `pyx --version` | Show version |
+| `pyx info` | Show environment info (OS, shell syntax, env keys, commands) |
+| `pyx info --system` | Show only system info |
+| `pyx info --syntax` | Show only shell syntax reference |
+| `pyx info --env` | Show only environment variable keys |
+| `pyx info --commands` | Show only available commands |
+| `pyx info --json` | Output as JSON (for programmatic use) |
 | `pyx run --code "..."` | Run inline Python code |
+| `pyx run --code "..." --async` | Run async code (supports top-level await) |
+| `pyx run --code "..." --timeout 10` | Run with 10s timeout (kills infinite loops) |
 | `pyx run --base64 "..." [-y]` | Run base64-encoded code (for complex code) |
 | `pyx run --file "path.py"` | Run a Python script file |
 | `pyx run --file "path.py" -- args` | Run script with arguments |
 | `pyx run --cwd "dir" --code "..."` | Run code in specified directory |
 | `pyx add --package "name"` | Install a package to optional dependencies |
-| `pyx list-env` | List available environment variable keys |
 | `pyx ensure-temp` | Ensure temp directory exists |
 
 ### Handling Special Characters
@@ -84,11 +92,12 @@ Add to VS Code `settings.json`:
 
 | Tool | Description |
 |------|-------------|
-| `run_python_code` | Execute inline Python code |
-| `run_python_file` | Execute a Python script file |
+| `run_python_code` | Execute inline Python code (supports `timeout`) |
+| `run_async_python_code` | Execute async code with top-level await (supports `timeout`) |
+| `run_python_file` | Execute a Python script file (supports `timeout`) |
 | `install_package` | Install a Python package |
 | `ensure_directory` | Ensure a directory exists |
-| `list_env_keys` | List environment variable keys |
+| `get_environment_info` | Get OS, shell syntax, env keys, available commands |
 
 ### Option 2: Instruction Prompt
 
@@ -99,11 +108,13 @@ Quick version — add to VS Code `prompts/global.instructions.md`:
 ```markdown
 **IMPORTANT: Avoid shell commands. Use python-executor instead.**
 
+- Get env info: `pyx info` (shows OS, shell syntax, env keys, commands)
 - Run code: `pyx run --code "..."`
+- Run async: `pyx run --code "await ..." --async`
+- Run with timeout: `pyx run --code "..." --timeout 30`
 - Run base64: `pyx run --base64 "..." -y` (for complex code)
 - Run file: `pyx run --file "path.py"`
 - Install: `pyx add --package "name"`
-- List env: `pyx list-env`
 ```
 
 ## Environment Variables
@@ -123,7 +134,7 @@ import os
 url = os.environ['MYSQL_URL']
 ```
 
-The `.env` file is auto-loaded. Use `pyx list-env` to see available keys (values hidden).
+The `.env` file is auto-loaded. Use `pyx info --env` to see available keys (values hidden).
 
 ## Optional Packages
 

@@ -3,14 +3,17 @@ MCP Server for python-executor.
 Provides tools for LLMs to execute Python code safely.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from pyx_core import run_code, run_file, add_package, ensure_temp, list_env_keys
+from pyx_core import run_code, run_file, run_async_code, add_package, ensure_temp, get_environment_info, format_environment_info
 
 logger = logging.getLogger("pyx-mcp")
 
@@ -35,6 +38,32 @@ async def list_tools() -> list[Tool]:
                     "cwd": {
                         "type": "string",
                         "description": "Working directory to run the code in. If not specified, uses current directory."
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Maximum execution time in seconds. If not specified, no timeout is applied."
+                    }
+                },
+                "required": ["code"]
+            }
+        ),
+        Tool(
+            name="run_async_python_code",
+            description="Execute async Python code containing async/await. Use this when your code needs to use asyncio, aiohttp, or other async libraries. Supports top-level await.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Async Python code to execute. Can contain top-level await statements."
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "description": "Working directory to run the code in. If not specified, uses current directory."
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Maximum execution time in seconds. If not specified, no timeout is applied."
                     }
                 },
                 "required": ["code"]
@@ -58,6 +87,10 @@ async def list_tools() -> list[Tool]:
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Command line arguments to pass to the script (will be set as sys.argv[1:])."
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Maximum execution time in seconds. If not specified, no timeout is applied."
                     }
                 },
                 "required": ["file_path"]
@@ -93,11 +126,32 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="list_env_keys",
-            description="List environment variable keys from .env file in current directory. Only returns key names, not values (to protect secrets). Use this to discover what configuration is available before using os.environ['KEY'] in code.",
+            name="get_environment_info",
+            description="Get comprehensive environment information including OS, shell type, shell syntax reference, available commands, and environment variable keys. Use this to understand the execution environment before running commands or code.",
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "include_system": {
+                        "type": "boolean",
+                        "description": "Include OS, shell, Python version info. Default: true.",
+                        "default": True
+                    },
+                    "include_syntax": {
+                        "type": "boolean",
+                        "description": "Include shell syntax reference (variable expansion, chaining, pipes, etc.). Default: true.",
+                        "default": True
+                    },
+                    "include_env": {
+                        "type": "boolean",
+                        "description": "Include environment variable keys from .env files. Default: true.",
+                        "default": True
+                    },
+                    "include_commands": {
+                        "type": "boolean",
+                        "description": "Check availability of common commands (git, curl, docker, etc.). Default: true.",
+                        "default": True
+                    }
+                },
                 "required": []
             }
         ),
@@ -105,47 +159,48 @@ async def list_tools() -> list[Tool]:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls"""
     
-    if name == "run_python_code":
-        code = arguments.get("code", "")
-        cwd = arguments.get("cwd")
-        result = run_code(code, cwd=cwd)
-        
+    def _format_result(result: Any, action: str = "Execution") -> list[TextContent]:
+        """Format ExecutionResult to TextContent."""
         output_parts = []
         if result.output:
             output_parts.append(f"Output:\n{result.output}")
         if result.error:
             output_parts.append(f"Error:\n{result.error}")
+        if result.traceback and not result.success:
+            output_parts.append(f"Traceback:\n{result.traceback}")
         if not output_parts:
-            output_parts.append("Code executed successfully (no output)")
+            output_parts.append(f"{action} completed successfully (no output)")
         
         status = "✓" if result.success else "✗"
         return [TextContent(
             type="text",
-            text=f"{status} Execution {'succeeded' if result.success else 'failed'}\n\n" + "\n\n".join(output_parts)
+            text=f"{status} {action} {'succeeded' if result.success else 'failed'}\n\n" + "\n\n".join(output_parts)
         )]
+    
+    if name == "run_python_code":
+        code = arguments.get("code", "")
+        cwd = arguments.get("cwd")
+        timeout = arguments.get("timeout")
+        result = run_code(code, cwd=cwd, timeout=timeout)
+        return _format_result(result)
+    
+    elif name == "run_async_python_code":
+        code = arguments.get("code", "")
+        cwd = arguments.get("cwd")
+        timeout = arguments.get("timeout")
+        result = run_async_code(code, cwd=cwd, timeout=timeout)
+        return _format_result(result, "Async execution")
     
     elif name == "run_python_file":
         file_path = arguments.get("file_path", "")
         cwd = arguments.get("cwd")
         script_args = arguments.get("script_args", [])
-        result = run_file(file_path, script_args=script_args, cwd=cwd)
-        
-        output_parts = []
-        if result.output:
-            output_parts.append(f"Output:\n{result.output}")
-        if result.error:
-            output_parts.append(f"Error:\n{result.error}")
-        if not output_parts:
-            output_parts.append("Script executed successfully (no output)")
-        
-        status = "✓" if result.success else "✗"
-        return [TextContent(
-            type="text",
-            text=f"{status} Execution {'succeeded' if result.success else 'failed'}\n\n" + "\n\n".join(output_parts)
-        )]
+        timeout = arguments.get("timeout")
+        result = run_file(file_path, script_args=script_args, cwd=cwd, timeout=timeout)
+        return _format_result(result, "Script execution")
     
     elif name == "install_package":
         package = arguments.get("package", "")
@@ -157,9 +212,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 text=f"✓ Package '{package}' installed successfully\n\n{result.output}"
             )]
         else:
+            error_msg = result.error or "Unknown error"
             return [TextContent(
                 type="text",
-                text=f"✗ Failed to install package '{package}'\n\n{result.error}"
+                text=f"✗ Failed to install package '{package}'\n\n{error_msg}"
             )]
     
     elif name == "ensure_directory":
@@ -172,24 +228,36 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 text=f"✓ {result.output}"
             )]
         else:
+            error_msg = result.error or "Unknown error"
             return [TextContent(
                 type="text",
-                text=f"✗ {result.error}"
+                text=f"✗ {error_msg}"
             )]
     
-    elif name == "list_env_keys":
-        result = list_env_keys()
+    elif name == "get_environment_info":
+        include_system = arguments.get("include_system", True)
+        include_syntax = arguments.get("include_syntax", True)
+        include_env = arguments.get("include_env", True)
+        include_commands = arguments.get("include_commands", True)
         
-        if result.success:
-            return [TextContent(
-                type="text",
-                text=f"✓ Available environment keys:\n{result.output}"
-            )]
-        else:
-            return [TextContent(
-                type="text",
-                text=f"✗ {result.error}"
-            )]
+        info = get_environment_info(
+            include_system=include_system,
+            include_syntax=include_syntax,
+            include_env=include_env,
+            include_commands=include_commands,
+        )
+        output = format_environment_info(
+            info,
+            include_system=include_system,
+            include_syntax=include_syntax,
+            include_env=include_env,
+            include_commands=include_commands,
+        )
+        
+        return [TextContent(
+            type="text",
+            text=f"✓ Environment Information\n\n{output}"
+        )]
     
     else:
         return [TextContent(

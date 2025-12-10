@@ -22,6 +22,26 @@ The `pyx` tool (python-executor) is responsible for:
 - Running Python code (inline, base64-encoded, or from files).
 - Installing additional packages when needed.
 - Performing filesystem or helper tasks (for example, creating a `temp` directory).
+- Providing environment information (OS, shell syntax, available commands).
+
+### 0. Get environment information (RECOMMENDED first step)
+
+Before running commands, understand the current environment:
+
+```bash
+pyx info              # Full info: OS, shell syntax, env keys, commands
+pyx info --system     # Only system info (OS, shell, Python version)
+pyx info --syntax     # Only shell syntax reference
+pyx info --env        # Only environment variable keys
+pyx info --commands   # Only available commands check
+pyx info --json       # JSON output for programmatic use
+```
+
+The output includes:
+- **System**: OS type/version, shell type, Python version
+- **Shell Syntax**: How to reference variables, chain commands, redirect output, etc.
+- **Environment Keys**: Available `.env` keys (values hidden for security)
+- **Available Commands**: Which tools are installed (git, curl, docker, etc.)
 
 ### 1. Run inline Python code
 
@@ -35,6 +55,18 @@ To run in a specific directory (instead of using `cd xxx && ...`):
 
 ```bash
 pyx run --cwd "/path/to/dir" --code "print('hello')"
+```
+
+To run with a timeout (prevents infinite loops):
+
+```bash
+pyx run --code "..." --timeout 30
+```
+
+To run async code with top-level await:
+
+```bash
+pyx run --code "import asyncio; await asyncio.sleep(1); print('done')" --async
 ```
 
 ### 2. Run base64-encoded Python code (RECOMMENDED for complex code)
@@ -68,23 +100,18 @@ pyx ensure-temp                  # Creates ./temp/
 pyx ensure-temp --dir "output"   # Creates ./output/
 ```
 
-### 6. List available environment keys
-
-```bash
-pyx list-env
-```
-
-Then use `os.environ['KEY']` in code to access values. The `.env` file in the working directory is auto-loaded.
-
 ### Requirements for tools / agents
 
+- **Start with `pyx info`** to understand the environment before running commands.
 - Always use `pyx ...` for any command that would otherwise use a shell.
 - **Use `--base64` for any code containing special characters** (regex, quotes, backslashes, newlines).
+- **Use `--timeout` for potentially long-running operations** to prevent hanging.
+- **Use `--async` for code with async/await** (aiohttp, asyncio, etc.).
 - Do NOT generate raw shell commands or `uv run --project ...`.
 - When invoking `pyx` programmatically, construct an argument list:
 
     ```text
-    ["pyx", "run", "--base64", base64_encoded_code]
+    ["pyx", "run", "--base64", base64_encoded_code, "--timeout", "60"]
     ```
 
 - Execute **without** shell interpolation (no `shell = true`).
