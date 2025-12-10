@@ -15,13 +15,14 @@ import subprocess
 import sys
 import traceback as tb_module
 from contextlib import redirect_stdout, redirect_stderr
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv, dotenv_values
 
-from .constants import SHELL_SYNTAX, COMMON_COMMANDS, ALL_COMMANDS, DEFAULT_TIMEOUT
+from .constants import COMMON_COMMANDS, ALL_COMMANDS, DEFAULT_TIMEOUT
+from .shell_syntax import get_all_syntax_support, format_syntax_table
 
 
 # Get the python-executor package root directory (where .env should be)
@@ -679,18 +680,19 @@ class EnvironmentInfo:
     # Shell info
     shell_type: str
     shell_path: str
-    shell_syntax: dict[str, str]
+    # Syntax support (dynamically tested)
+    syntax_support: dict[str, dict[str, Any]] = field(default_factory=dict)
     # Python info
-    python_version: str
-    python_executable: str
-    pyx_version: str
+    python_version: str = ""
+    python_executable: str = ""
+    pyx_version: str = ""
     # Environment keys
-    global_env_keys: list[str]
-    local_env_keys: list[str]
-    global_env_path: str
-    local_env_path: str
+    global_env_keys: list[str] = field(default_factory=list)
+    local_env_keys: list[str] = field(default_factory=list)
+    global_env_path: str = ""
+    local_env_path: str = ""
     # Available commands
-    commands: dict[str, dict[str, Any]]
+    commands: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def get_environment_info(
@@ -704,7 +706,7 @@ def get_environment_info(
     
     Args:
         include_system: Include OS, shell, Python info
-        include_syntax: Include shell syntax reference
+        include_syntax: Include shell syntax support (dynamically tested)
         include_env: Include environment variable keys
         include_commands: Include available commands check
         
@@ -721,7 +723,9 @@ def get_environment_info(
     
     # Shell info
     shell_type, shell_path = _detect_shell()
-    shell_syntax = SHELL_SYNTAX.get(shell_type, SHELL_SYNTAX["bash"])
+    
+    # Syntax support (dynamically tested)
+    syntax_support = get_all_syntax_support(shell_type) if include_syntax else {}
     
     # Python info
     python_version = platform.python_version()
@@ -741,7 +745,7 @@ def get_environment_info(
         os_arch=os_arch,
         shell_type=shell_type,
         shell_path=shell_path,
-        shell_syntax=shell_syntax if include_syntax else {},
+        syntax_support=syntax_support,
         python_version=python_version,
         python_executable=python_executable,
         pyx_version=__version__,
@@ -783,31 +787,25 @@ def format_environment_info(
         lines.append(f"pyx: {info.pyx_version}")
         lines.append("")
     
-    if include_syntax and info.shell_syntax:
-        lines.append("=== Shell Syntax ===")
-        syntax_labels = {
-            "variable": "Variable",
-            "chaining_always": "Chaining (always)",
-            "chaining_on_success": "Chaining (on success)",
-            "chaining_on_fail": "Chaining (on fail)",
-            "pipe": "Pipe",
-            "redirect_stdout": "Redirect stdout",
-            "redirect_stderr": "Redirect stderr",
-            "redirect_both": "Redirect both",
-            "background": "Background",
-            "path_separator": "Path separator",
-            "escape_char": "Escape char",
-            "string_literal": "String (literal)",
-            "string_interpolated": "String (interpolated)",
-            "command_substitution": "Command substitution",
-            "null_device": "Null device",
-            "home_dir": "Home dir",
-            "line_continuation": "Line continuation",
-            "comment": "Comment",
-        }
-        for key, label in syntax_labels.items():
-            if key in info.shell_syntax:
-                lines.append(f"  {label}: {info.shell_syntax[key]}")
+    if include_syntax and info.syntax_support:
+        lines.append(f"=== Shell Syntax ({info.shell_type}) ===")
+        # Calculate column widths
+        desc_width = max(len(s["description"]) for s in info.syntax_support.values())
+        syntax_width = max(len(str(s["syntax"])) for s in info.syntax_support.values())
+        desc_width = max(desc_width, 25)
+        syntax_width = max(syntax_width, 20)
+        
+        # Header
+        lines.append(f"  {'Pattern':<{desc_width}} │ {'OK':<3} │ {'Syntax':<{syntax_width}} │ pyx Alternative")
+        lines.append(f"  {'─' * desc_width}─┼─────┼─{'─' * syntax_width}─┼─" + "─" * 25)
+        
+        # Rows
+        from .shell_syntax import SYNTAX_PATTERN_ORDER
+        for name in SYNTAX_PATTERN_ORDER:
+            if name in info.syntax_support:
+                s = info.syntax_support[name]
+                ok = "✓" if s["supported"] else "✗"
+                lines.append(f"  {s['description']:<{desc_width}} │ {ok:<3} │ {s['syntax']:<{syntax_width}} │ {s['pyx_alternative']}")
         lines.append("")
     
     if include_env:

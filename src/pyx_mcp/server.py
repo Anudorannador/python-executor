@@ -127,7 +127,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_environment_info",
-            description="Get comprehensive environment information including OS, shell type, shell syntax reference, available commands, and environment variable keys. Use this to understand the execution environment before running commands or code.",
+            description="Get comprehensive environment information including OS, shell type, dynamically-tested shell syntax support, available commands (111 tools), and environment variable keys. Use this to understand the execution environment before running commands or code.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -138,7 +138,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "include_syntax": {
                         "type": "boolean",
-                        "description": "Include shell syntax reference (variable expansion, chaining, pipes, etc.). Default: true.",
+                        "description": "Include dynamically-tested shell syntax support (20 patterns: variable, chaining, pipe, redirect, glob, etc.) with pyx alternatives. Default: true.",
                         "default": True
                     },
                     "include_env": {
@@ -148,7 +148,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "include_commands": {
                         "type": "boolean",
-                        "description": "Check availability of common commands (git, curl, docker, etc.). Default: true.",
+                        "description": "Check availability of common commands (111 tools: git, curl, docker, etc.). Default: true.",
                         "default": True
                     }
                 },

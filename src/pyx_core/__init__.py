@@ -8,10 +8,16 @@ A cross-platform Python code executor designed for LLM/Agent integration.
 __version__ = "0.1.0"
 
 from .constants import (
-    SHELL_SYNTAX,
     COMMON_COMMANDS,
     ALL_COMMANDS,
     DEFAULT_TIMEOUT,
+    # Shell syntax exports
+    SYNTAX_PATTERNS,
+    SYNTAX_PATTERN_ORDER,
+    get_all_syntax_support,
+    get_syntax_info,
+    test_syntax_support,
+    format_syntax_table,
 )
 
 from .executor import (
@@ -38,7 +44,13 @@ __all__ = [
     "get_environment_info",
     "format_environment_info",
     "DEFAULT_TIMEOUT",
-    "SHELL_SYNTAX",
     "COMMON_COMMANDS",
     "ALL_COMMANDS",
+    # Shell syntax
+    "SYNTAX_PATTERNS",
+    "SYNTAX_PATTERN_ORDER",
+    "get_all_syntax_support",
+    "get_syntax_info",
+    "test_syntax_support",
+    "format_syntax_table",
 ]

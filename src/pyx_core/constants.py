@@ -1,94 +1,20 @@
 """
 Constants for python-executor.
 
-Contains shell syntax definitions and common commands list.
+Contains common commands list and re-exports shell syntax definitions.
 """
 
 from __future__ import annotations
 
-# Shell syntax definitions for different shells
-SHELL_SYNTAX: dict[str, dict[str, str]] = {
-    "powershell": {
-        "variable": "$env:VAR or $VAR",
-        "chaining_always": "cmd1; cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "*>",
-        "background": "Start-Process cmd",
-        "path_separator": "\\ (also /)",
-        "escape_char": "`",
-        "string_literal": "'...'",
-        "string_interpolated": '"..."',
-        "command_substitution": "$(cmd)",
-        "null_device": "$null",
-        "home_dir": "$HOME",
-        "line_continuation": "`",
-        "comment": "#",
-    },
-    "cmd": {
-        "variable": "%VAR%",
-        "chaining_always": "cmd1 & cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "> file 2>&1",
-        "background": "start /b cmd",
-        "path_separator": "\\",
-        "escape_char": "^",
-        "string_literal": "N/A",
-        "string_interpolated": '"..."',
-        "command_substitution": "for /f",
-        "null_device": "NUL",
-        "home_dir": "%USERPROFILE%",
-        "line_continuation": "^",
-        "comment": "REM or ::",
-    },
-    "bash": {
-        "variable": "$VAR",
-        "chaining_always": "cmd1; cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "&> or 2>&1",
-        "background": "cmd &",
-        "path_separator": "/",
-        "escape_char": "\\",
-        "string_literal": "'...'",
-        "string_interpolated": '"..."',
-        "command_substitution": "$(cmd)",
-        "null_device": "/dev/null",
-        "home_dir": "$HOME or ~",
-        "line_continuation": "\\",
-        "comment": "#",
-    },
-    "zsh": {
-        "variable": "$VAR",
-        "chaining_always": "cmd1; cmd2",
-        "chaining_on_success": "cmd1 && cmd2",
-        "chaining_on_fail": "cmd1 || cmd2",
-        "pipe": "|",
-        "redirect_stdout": ">",
-        "redirect_stderr": "2>",
-        "redirect_both": "&> or 2>&1",
-        "background": "cmd &",
-        "path_separator": "/",
-        "escape_char": "\\",
-        "string_literal": "'...'",
-        "string_interpolated": '"..."',
-        "command_substitution": "$(cmd)",
-        "null_device": "/dev/null",
-        "home_dir": "$HOME or ~",
-        "line_continuation": "\\",
-        "comment": "#",
-    },
-}
+# Re-export shell syntax from shell_syntax module
+from .shell_syntax import (
+    SYNTAX_PATTERNS,
+    SYNTAX_PATTERN_ORDER,
+    get_all_syntax_support,
+    get_syntax_info,
+    test_syntax_support,
+    format_syntax_table,
+)
 
 # Common commands to check for availability, organized by category
 COMMON_COMMANDS: dict[str, list[str]] = {

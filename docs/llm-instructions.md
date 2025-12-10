@@ -134,9 +134,23 @@ pyx info
 ```
 
 This tells you:
-- **OS & Shell**: What platform you're on, what shell syntax to use if needed
-- **Available Commands**: Which tools exist (git, docker, node, etc.)
+
+- **OS & Shell**: What platform you're on
+- **Syntax Support**: 20 shell patterns dynamically tested (shows ✓/✗ for each)
+- **Available Commands**: 111 tools checked (git, docker, node, etc.)
 - **Environment Keys**: What `.env` variables are available
+
+Example output for `pyx info --syntax`:
+
+```
+=== Shell Syntax (powershell) ===
+  Pattern                        │ OK  │ Syntax         │ pyx Alternative
+  ───────────────────────────────┼─────┼────────────────┼─────────────────────
+  Environment variable           │ ✓   │ $env:VAR       │ os.environ['VAR']
+  Chain commands (on success)    │ ✗   │ cmd1 && cmd2   │ cmd1(); cmd2()
+  Pipe output to another command │ ✓   │ cmd1 | cmd2    │ subprocess.PIPE
+  ...
+```
 
 Use `pyx info --json` for programmatic parsing.
 

@@ -40,11 +40,11 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | Command | Description |
 |---------|-------------|
 | `pyx --version` | Show version |
-| `pyx info` | Show environment info (OS, shell syntax, env keys, commands) |
+| `pyx info` | Show environment info (OS, syntax support, env keys, commands) |
 | `pyx info --system` | Show only system info |
-| `pyx info --syntax` | Show only shell syntax reference |
+| `pyx info --syntax` | Show 20 shell patterns with dynamic support detection |
 | `pyx info --env` | Show only environment variable keys |
-| `pyx info --commands` | Show only available commands |
+| `pyx info --commands` | Show 111 available commands detection |
 | `pyx info --json` | Output as JSON (for programmatic use) |
 | `pyx run --code "..."` | Run inline Python code |
 | `pyx run --code "..." --async` | Run async code (supports top-level await) |
@@ -97,7 +97,27 @@ Add to VS Code `settings.json`:
 | `run_python_file` | Execute a Python script file (supports `timeout`) |
 | `install_package` | Install a Python package |
 | `ensure_directory` | Ensure a directory exists |
-| `get_environment_info` | Get OS, shell syntax, env keys, available commands (111 tools) |
+| `get_environment_info` | Get OS, 20 shell syntax patterns (dynamically tested), env keys, 111 commands |
+
+**Shell syntax patterns checked by `pyx info --syntax`:**
+
+| Pattern | Description | pyx Alternative |
+|---------|-------------|-----------------|
+| Variable | Environment variable expansion | `os.environ['VAR']` |
+| Chaining (&&) | Run on success | `cmd1(); cmd2()` |
+| Chaining (\|\|) | Run on failure | `try/except` |
+| Chaining (;) | Run always | `cmd1(); cmd2()` |
+| Pipe | Pipe output | `subprocess.PIPE` |
+| Redirect (>, 2>, &>) | Redirect output | `open('f', 'w')` |
+| Glob (*, **) | Wildcard matching | `Path.glob()` |
+| Command substitution | Capture output | `check_output()` |
+| Arithmetic | Math in shell | Python math |
+| Exit code | Check return code | `result.returncode` |
+| Background | Run in background | `Popen()` or `--async` |
+| Test file/dir | Check existence | `Path.exists()` |
+| String interpolation | Variable in string | `f'hello {var}'` |
+| Here-string | Multi-line input | `'''text'''` |
+| Null device | Discard output | `subprocess.DEVNULL` |
 
 **Commands checked by `pyx info --commands`:**
 
