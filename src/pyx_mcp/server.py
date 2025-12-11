@@ -13,7 +13,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from pyx_core import run_code, run_file, run_async_code, add_package, ensure_temp, get_environment_info, format_environment_info
+from pyx_core import run_code, run_file, run_async_code, add_package, ensure_temp, get_environment_info, format_environment_info, generate_instructions, save_with_backup
 
 logger = logging.getLogger("pyx-mcp")
 
@@ -155,6 +155,31 @@ async def list_tools() -> list[Tool]:
                 "required": []
             }
         ),
+        Tool(
+            name="generate_llm_instructions",
+            description="Generate LLM instructions markdown based on current environment. Returns structured data with markdown content, env variable analysis with guessed usage, and raw environment info. Optionally saves to file.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "File path to save the generated markdown. If not specified, markdown is returned but not saved.",
+                        "default": None
+                    },
+                    "save_to_file": {
+                        "type": "boolean",
+                        "description": "Whether to save the markdown to file. Default: false (just return content).",
+                        "default": False
+                    },
+                    "backup_existing": {
+                        "type": "boolean",
+                        "description": "Create numbered backup if file exists. Default: true.",
+                        "default": True
+                    }
+                },
+                "required": []
+            }
+        ),
     ]
 
 
@@ -257,6 +282,65 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(
             type="text",
             text=f"✓ Environment Information\n\n{output}"
+        )]
+    
+    elif name == "generate_llm_instructions":
+        import json
+        
+        output_path = arguments.get("output_path", "./docs/llm-instructions.md")
+        save_to_file = arguments.get("save_to_file", False)
+        backup_existing = arguments.get("backup_existing", True)
+        
+        # Generate instructions
+        result = generate_instructions(show_progress=False)
+        
+        if not result.success:
+            return [TextContent(
+                type="text",
+                text=f"✗ Failed to generate instructions: {result.error}"
+            )]
+        
+        # Optionally save to file
+        saved_path = None
+        backup_path = None
+        if save_to_file and output_path:
+            success, saved_path, backup_path = save_with_backup(
+                result.markdown,
+                output_path,
+                force=not backup_existing,
+            )
+            if not success:
+                return [TextContent(
+                    type="text",
+                    text=f"✗ Failed to save file to {output_path}"
+                )]
+        
+        # Build structured response
+        response = {
+            "success": True,
+            "markdown": result.markdown,
+            "env_keys_with_usage": result.env_keys_with_usage,
+            "summary": {
+                "os": result.raw_info.os_name,
+                "shell": result.raw_info.shell_type,
+                "python_version": result.raw_info.python_version,
+                "pyx_version": result.raw_info.pyx_version,
+                "syntax_patterns_count": len(result.raw_info.syntax_support),
+                "env_variables_count": len(result.env_keys_with_usage),
+                "available_commands_count": sum(1 for d in result.raw_info.commands.values() if d["available"]),
+                "total_commands_checked": len(result.raw_info.commands),
+            },
+        }
+        
+        if saved_path:
+            response["saved_path"] = saved_path
+        if backup_path:
+            response["backup_path"] = backup_path
+        
+        # Return JSON for structured parsing by LLM
+        return [TextContent(
+            type="text",
+            text=json.dumps(response, indent=2)
         )]
     
     else:

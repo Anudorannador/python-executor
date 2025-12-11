@@ -24,6 +24,8 @@ from pyx_core import (
     ensure_temp,
     get_environment_info,
     format_environment_info,
+    generate_instructions,
+    save_with_backup,
 )
 
 console = Console()
@@ -69,6 +71,15 @@ def main() -> NoReturn | None:
     info_parser.add_argument("--env", action="store_true", help="Show only environment keys")
     info_parser.add_argument("--commands", action="store_true", help="Show only available commands")
     info_parser.add_argument("--json", dest="as_json", action="store_true", help="Output as JSON")
+
+    # generate-instructions command (alias: gi)
+    gen_parser = subparsers.add_parser("generate-instructions", aliases=["gi"], help="Generate LLM instructions markdown file from environment info")
+    # Default path: PYX_LLM_INSTRUCTIONS_PATH env var, or ./docs/llm-instructions.md
+    default_output = os.environ.get("PYX_LLM_INSTRUCTIONS_PATH", "./docs/llm-instructions.md")
+    gen_parser.add_argument("--output", "-o", type=str, default=default_output, help=f"Output path (default: $PYX_LLM_INSTRUCTIONS_PATH or {default_output})")
+    gen_parser.add_argument("--ask", action="store_true", help="Ask before replacing existing file (default: auto-backup)")
+    gen_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
+    gen_parser.add_argument("--print", dest="print_only", action="store_true", help="Print markdown to stdout instead of saving")
 
     args = parser.parse_args()
 
@@ -181,6 +192,60 @@ def main() -> NoReturn | None:
                 include_commands=include_commands,
             )
             print(output)
+        sys.exit(0)
+    elif args.command in ("generate-instructions", "gi"):
+        from pathlib import Path
+        
+        output_path = Path(args.output)
+        
+        # Generate instructions with progress bars
+        console.print("[bold blue]Collecting environment information...[/bold blue]")
+        result = generate_instructions(show_progress=True)
+        
+        if not result.success:
+            console.print(f"[red]Error: {result.error}[/red]")
+            sys.exit(1)
+        
+        # Print only mode
+        if args.print_only:
+            print(result.markdown)
+            sys.exit(0)
+        
+        # Handle existing file - only ask if --ask flag is set (default: auto-backup)
+        if output_path.exists() and args.ask and not args.force:
+            console.print(f"\n[yellow]File already exists: {output_path}[/yellow]")
+            choice = console.input("[bold]Choose action ([r]eplace with backup / [o]verwrite / [c]ancel): [/bold]").lower().strip()
+            
+            if choice in ("c", "cancel", ""):
+                console.print("[dim]Cancelled.[/dim]")
+                sys.exit(0)
+            elif choice in ("o", "overwrite"):
+                args.force = True
+            # 'r' or 'replace' will use default backup behavior
+        
+        # Save the file
+        success, saved_path, backup_path = save_with_backup(
+            result.markdown,
+            output_path,
+            force=args.force,
+        )
+        
+        if success:
+            console.print(f"\n[green]✓ Generated LLM instructions:[/green] {saved_path}")
+            if backup_path:
+                console.print(f"[dim]  Backup created: {backup_path}[/dim]")
+            
+            # Show summary
+            console.print("\n[bold]Summary:[/bold]")
+            console.print(f"  • OS: {result.raw_info.os_name} ({result.raw_info.shell_type})")
+            console.print(f"  • Shell syntax patterns: {len(result.raw_info.syntax_support)}")
+            console.print(f"  • Environment variables: {len(result.env_keys_with_usage)}")
+            available_cmds = sum(1 for d in result.raw_info.commands.values() if d["available"])
+            console.print(f"  • Available commands: {available_cmds}/{len(result.raw_info.commands)}")
+        else:
+            console.print("[red]Error saving file[/red]")
+            sys.exit(1)
+        
         sys.exit(0)
     else:
         parser.print_help()

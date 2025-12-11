@@ -16,3 +16,5 @@ wheels/
 
 temp/
 uv.lock
+
+docs/llm-instructions.md.bak*

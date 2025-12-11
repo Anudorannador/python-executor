@@ -11,7 +11,8 @@ from .constants import (
     COMMON_COMMANDS,
     ALL_COMMANDS,
     DEFAULT_TIMEOUT,
-    # Shell syntax exports
+    ENV_PATTERNS,
+    # Shell syntax exports (re-exported from constants)
     SYNTAX_PATTERNS,
     SYNTAX_PATTERN_ORDER,
     get_all_syntax_support,
@@ -22,30 +23,51 @@ from .constants import (
 
 from .executor import (
     ExecutionResult,
-    EnvironmentInfo,
     run_code,
     run_file,
     run_async_code,
     add_package,
     ensure_temp,
+)
+
+from .environment import (
+    EnvironmentInfo,
     get_environment_info,
     format_environment_info,
+    guess_env_usage,
+    get_env_with_usage,
+)
+
+from .generator import (
+    GenerateInstructionsResult,
+    generate_instructions,
+    save_with_backup,
 )
 
 __all__ = [
     "__version__",
+    # Executor
     "ExecutionResult",
-    "EnvironmentInfo",
     "run_code",
     "run_file",
     "run_async_code",
     "add_package",
     "ensure_temp",
+    # Environment
+    "EnvironmentInfo",
     "get_environment_info",
     "format_environment_info",
+    "guess_env_usage",
+    "get_env_with_usage",
+    # Generator
+    "GenerateInstructionsResult",
+    "generate_instructions",
+    "save_with_backup",
+    # Constants
     "DEFAULT_TIMEOUT",
     "COMMON_COMMANDS",
     "ALL_COMMANDS",
+    "ENV_PATTERNS",
     # Shell syntax
     "SYNTAX_PATTERNS",
     "SYNTAX_PATTERN_ORDER",

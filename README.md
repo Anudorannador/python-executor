@@ -46,6 +46,10 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | `pyx info --env` | Show only environment variable keys |
 | `pyx info --commands` | Show 111 available commands detection |
 | `pyx info --json` | Output as JSON (for programmatic use) |
+| `pyx gi` | Generate LLM instructions (alias for generate-instructions) |
+| `pyx gi -o path` | Save to custom path (default: $PYX_LLM_INSTRUCTIONS_PATH) |
+| `pyx gi --ask` | Ask before replacing (default: auto-backup) |
+| `pyx gi --print` | Print markdown to stdout instead of saving |
 | `pyx run --code "..."` | Run inline Python code |
 | `pyx run --code "..." --async` | Run async code (supports top-level await) |
 | `pyx run --code "..." --timeout 10` | Run with 10s timeout (kills infinite loops) |
@@ -98,6 +102,7 @@ Add to VS Code `settings.json`:
 | `install_package` | Install a Python package |
 | `ensure_directory` | Ensure a directory exists |
 | `get_environment_info` | Get OS, 20 shell syntax patterns (dynamically tested), env keys, 111 commands |
+| `generate_llm_instructions` | Generate LLM instructions with env analysis and guessed variable usage |
 
 **Shell syntax patterns checked by `pyx info --syntax`:**
 
@@ -139,6 +144,19 @@ Add to VS Code `settings.json`:
 ### Option 2: Instruction Prompt
 
 Tell LLM to use `pyx` instead of shell commands. See [docs/llm-instructions.md](docs/llm-instructions.md) for a complete example.
+
+**Generate environment-specific instructions:**
+
+```bash
+# Generate instructions based on your current system
+pyx generate-instructions
+
+# This creates ./docs/llm-instructions.md with:
+# - Current OS/shell/Python info
+# - Dynamically tested shell syntax support
+# - Environment variables with guessed usage
+# - Available commands on your system
+```
 
 Quick version — add to VS Code `prompts/global.instructions.md`:
 
@@ -210,7 +228,12 @@ python-executor/
 ├── docs/
 │   └── llm-instructions.md
 └── src/
-    ├── pyx_core/     # Core execution functions
+    ├── pyx_core/     # Core library
+    │   ├── constants.py    # Commands list, ENV_PATTERNS
+    │   ├── executor.py     # run_code, run_file, run_async_code
+    │   ├── environment.py  # get_environment_info, format_environment_info
+    │   ├── generator.py    # generate_instructions, save_with_backup
+    │   └── shell_syntax.py # Shell syntax patterns and testing
     ├── pyx_cli/      # CLI interface
     └── pyx_mcp/      # MCP server
 ```
