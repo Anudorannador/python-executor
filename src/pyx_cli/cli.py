@@ -157,11 +157,15 @@ def main() -> NoReturn | None:
         include_env = show_all or args.env
         include_commands = show_all or args.commands
         
+        # Show progress bars for interactive (non-JSON) mode
+        show_progress = not args.as_json
+        
         info = get_environment_info(
             include_system=include_system,
             include_syntax=include_syntax,
             include_env=include_env,
             include_commands=include_commands,
+            show_progress=show_progress,
         )
         
         if args.as_json:

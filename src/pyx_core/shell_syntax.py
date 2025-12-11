@@ -11,6 +11,21 @@ import subprocess
 import sys
 from typing import Any
 
+# Optional tqdm import with fallback
+try:
+    from tqdm import tqdm as _tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    _tqdm = None
+
+
+def _iter_with_progress(iterable, show_progress: bool = False, **kwargs):
+    """Wrap iterable with tqdm if available and requested."""
+    if show_progress and HAS_TQDM:
+        return _tqdm(iterable, **kwargs)
+    return iterable
+
 
 # All shell syntax pattern definitions
 SYNTAX_PATTERNS: dict[str, dict[str, Any]] = {
@@ -415,17 +430,24 @@ def get_syntax_info(shell_type: str, pattern_name: str) -> dict[str, Any]:
     }
 
 
-def get_all_syntax_support(shell_type: str) -> dict[str, dict[str, Any]]:
+def get_all_syntax_support(shell_type: str, show_progress: bool = False) -> dict[str, dict[str, Any]]:
     """Get support status for all syntax patterns.
     
     Args:
         shell_type: Shell type (powershell, cmd, bash, zsh)
+        show_progress: Show tqdm progress bar (default: False)
         
     Returns:
         Dict mapping pattern name to syntax info
     """
     results = {}
-    for name in SYNTAX_PATTERN_ORDER:
+    items = _iter_with_progress(
+        SYNTAX_PATTERN_ORDER,
+        show_progress=show_progress,
+        desc="Testing shell syntax",
+        leave=False,
+    )
+    for name in items:
         results[name] = get_syntax_info(shell_type, name)
     return results
 

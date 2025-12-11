@@ -24,6 +24,21 @@ from dotenv import load_dotenv, dotenv_values
 from .constants import COMMON_COMMANDS, ALL_COMMANDS, DEFAULT_TIMEOUT
 from .shell_syntax import get_all_syntax_support, format_syntax_table
 
+# Optional tqdm import with fallback
+try:
+    from tqdm import tqdm as _tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    _tqdm = None
+
+
+def _iter_with_progress(iterable, show_progress: bool = False, **kwargs):
+    """Wrap iterable with tqdm if available and requested."""
+    if show_progress and HAS_TQDM:
+        return _tqdm(iterable, **kwargs)
+    return iterable
+
 
 # Get the python-executor package root directory (where .env should be)
 _PACKAGE_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
@@ -651,8 +666,11 @@ def _get_command_version(cmd: str) -> str | None:
     return None
 
 
-def _check_commands() -> dict[str, dict[str, Any]]:
+def _check_commands(show_progress: bool = False) -> dict[str, dict[str, Any]]:
     """Check availability of common commands.
+    
+    Args:
+        show_progress: Show tqdm progress bar (default: False)
     
     Returns:
         Dict mapping command name to availability info
@@ -660,7 +678,13 @@ def _check_commands() -> dict[str, dict[str, Any]]:
     import shutil
     
     results: dict[str, dict[str, Any]] = {}
-    for cmd in ALL_COMMANDS:
+    items = _iter_with_progress(
+        ALL_COMMANDS,
+        show_progress=show_progress,
+        desc="Checking commands",
+        leave=False,
+    )
+    for cmd in items:
         path = shutil.which(cmd)
         if path:
             version = _get_command_version(cmd)
@@ -700,6 +724,7 @@ def get_environment_info(
     include_syntax: bool = True,
     include_env: bool = True,
     include_commands: bool = True,
+    show_progress: bool = False,
 ) -> EnvironmentInfo:
     """
     Get comprehensive environment information.
@@ -709,6 +734,7 @@ def get_environment_info(
         include_syntax: Include shell syntax support (dynamically tested)
         include_env: Include environment variable keys
         include_commands: Include available commands check
+        show_progress: Show tqdm progress bars (default: False)
         
     Returns:
         EnvironmentInfo with all requested information
@@ -725,7 +751,7 @@ def get_environment_info(
     shell_type, shell_path = _detect_shell()
     
     # Syntax support (dynamically tested)
-    syntax_support = get_all_syntax_support(shell_type) if include_syntax else {}
+    syntax_support = get_all_syntax_support(shell_type, show_progress=show_progress) if include_syntax else {}
     
     # Python info
     python_version = platform.python_version()
@@ -737,7 +763,7 @@ def get_environment_info(
     local_keys = _get_env_keys(local_env_path) if include_env else []
     
     # Commands
-    commands = _check_commands() if include_commands else {}
+    commands = _check_commands(show_progress=show_progress) if include_commands else {}
     
     return EnvironmentInfo(
         os_name=os_name,
