@@ -63,6 +63,8 @@ full = [
     "wrapt>=2.0.1",
     # Windows only
     "pywin32>=311; sys_platform == 'win32'",
+    # Bloomberg API
+    "blpapi>=3.25.11.1",
 ]
 
 [project.scripts]
@@ -70,6 +72,13 @@ python-executor = "pyx_cli.cli:main"
 pyx = "pyx_cli.cli:main"
 python-executor-mcp = "pyx_mcp.server:main"
 pyx-mcp = "pyx_mcp.server:main"
+
+[tool.uv.sources]
+blpapi = { index = "bloomberg" }
+
+[[tool.uv.index]]
+name = "bloomberg"
+url = "https://blpapi.bloomberg.com/repository/releases/python/simple/"
 
 [build-system]
 requires = ["hatchling"]
