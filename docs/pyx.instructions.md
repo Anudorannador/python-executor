@@ -1,14 +1,14 @@
 ---
 applyTo: "**"
-name: "llm-instructions"
+name: "pyx-instructions"
 description: "Auto-generated instructions for LLMs/Agents to use pyx instead of raw shell commands."
 ---
 
 ## Current Environment
 
-- **OS**: Linux (x86_64)
-- **Shell**: bash (`/bin/bash`)
-- **Python**: 3.12.1 (`/home/codespace/.local/share/uv/tools/python-executor-mcp/bin/python`)
+- **OS**: Windows (AMD64)
+- **Shell**: powershell (`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE`)
+- **Python**: 3.13.2 (`C:\Users\xingxiang.qiu\AppData\Roaming\uv\tools\python-executor-mcp\Scripts\python.exe`)
 - **pyx version**: 0.1.0
 
 ## Why Use pyx Instead of Shell Commands?
@@ -42,6 +42,35 @@ pyx run --code "print('hello')"
 curl -s https://api.example.com | jq '.data'
 ```
 
+### ⚠️ CRITICAL: How to Use `--base64`
+
+**The `--base64` flag means YOU (the LLM) must base64-encode the Python code BEFORE passing it to pyx.**
+
+> This is NOT a pyx feature that auto-encodes your code. You must encode it yourself!
+> This prevents shell escaping disasters with quotes, backslashes, regex, and special characters.
+
+**Example workflow:**
+
+1. Write your Python code:
+   ```python
+   import re
+   text = open('file.txt').read()
+   print(re.findall(r'"([^"]+)"', text))
+   ```
+
+2. Base64-encode it (you do this mentally or via your model's capabilities):
+   ```
+   aW1wb3J0IHJlCnRleHQgPSBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKQpwcmludChyZS5maW5kYWxsKHInXCIoW15cIl0rKVwiJywgdGV4dCkp
+   ```
+
+3. Pass the encoded string to pyx:
+   ```bash
+   pyx run --base64 "aW1wb3J0IHJlCnRleHQgPSBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKQpwcmludChyZS5maW5kYWxsKHInXCIoW15cIl0rKVwiJywgdGV4dCkp" -y
+   ```
+
+**Why?** Without base64 encoding, code like `print("hello")` becomes a shell escaping nightmare.
+With base64, the shell sees only safe alphanumeric characters—no quotes, no backslashes, no problems.
+
 ---
 
 ## Quick Reference
@@ -61,32 +90,32 @@ curl -s https://api.example.com | jq '.data'
 
 ---
 
-## Shell Syntax Support (bash)
+## Shell Syntax Support (powershell)
 
 The following shell patterns were **dynamically tested** on this system:
 
 | Pattern | Supported | Shell Syntax | pyx Alternative |
 |---------|-----------|--------------|-----------------|
-| Environment variable | ✓ | `$VAR` | `os.environ['VAR']` |
-| Chain commands (on success) | ✓ | `cmd1 && cmd2` | `cmd1(); cmd2()` |
-| Chain commands (on failure) | ✓ | `cmd1 || cmd2` | `try: cmd1() except: cmd2()` |
+| Environment variable | ✓ | `$env:VAR` | `os.environ['VAR']` |
+| Chain commands (on success) | ✗ | `cmd1 && cmd2` | `cmd1(); cmd2()` |
+| Chain commands (on failure) | ✗ | `cmd1 || cmd2` | `try: cmd1() except: cmd2()` |
 | Chain commands (always) | ✓ | `cmd1; cmd2` | `cmd1(); cmd2()` |
 | Pipe output to another command | ✓ | `cmd1 | cmd2` | `subprocess.PIPE` |
 | Redirect stdout to file | ✓ | `> file` | `open('f', 'w').write(...)` |
-| Redirect stderr to file | ✓ | `2> file` | `stderr=open('f', 'w')` |
-| Redirect stdout and stderr | ✓ | `&> file` | `capture_output=True` |
+| Redirect stderr to file | ✗ | `2> file` | `stderr=open('f', 'w')` |
+| Redirect stdout and stderr | ✓ | `*> file` | `capture_output=True` |
 | Append output to file | ✓ | `>> file` | `open('f', 'a').write(...)` |
 | Wildcard file matching (*) | ✓ | `*.ext` | `Path.glob('*.py')` |
-| Recursive wildcard (**) | ✓ | `**/*.ext` | `Path.rglob('*.py')` |
+| Recursive wildcard (**) | ✓ | `Get-ChildItem -Recurse` | `Path.rglob('*.py')` |
 | Capture command output inline | ✓ | `$(cmd)` | `subprocess.check_output()` |
-| Arithmetic expansion | ✓ | `$((expr))` | `Python: 1 + 1` |
-| Check last exit code | ✓ | `$?` | `result.returncode` |
-| Run command in background | ✓ | `cmd &` | `subprocess.Popen() or --async` |
-| Test if file exists | ✓ | `test -f file` | `Path('f').exists()` |
-| Test if directory exists | ✓ | `test -d dir` | `Path('d').is_dir()` |
+| Arithmetic expansion | ✓ | `$(1+1)` | `Python: 1 + 1` |
+| Check last exit code | ✓ | `$LASTEXITCODE` | `result.returncode` |
+| Run command in background | ✓ | `Start-Process` | `subprocess.Popen() or --async` |
+| Test if file exists | ✓ | `Test-Path file` | `Path('f').exists()` |
+| Test if directory exists | ✓ | `Test-Path -PathType Container` | `Path('d').is_dir()` |
 | Variable in string | ✓ | `"hello $var"` | `f'hello {var}'` |
-| Multi-line string input | ✗ | `<<< 'string' or <<EOF` | `'''multi-line'''` |
-| Discard output (null device) | ✓ | `/dev/null` | `subprocess.DEVNULL` |
+| Multi-line string input | ✗ | `@'...'@` | `'''multi-line'''` |
+| Discard output (null device) | ✓ | `$null` | `subprocess.DEVNULL` |
 
 ---
 
@@ -96,10 +125,9 @@ The following environment variables are available (values hidden):
 
 | Variable | Guessed Usage |
 |----------|---------------|
-| `MYSQL_152_URL` | Database connection or configuration |
-| `PYX_LLM_INSTRUCTIONS_PATH` | File system path configuration |
-| `REDIS_118_URL` | Database connection or configuration |
-| `REDIS_152_URL` | Database connection or configuration |
+| `MYSQL_123_URL` | Database connection or configuration |
+| `POSTGRES_50_URL` | Database connection or configuration |
+| `REDIS_16_URL` | Database connection or configuration |
 
 Access in code:
 
@@ -112,13 +140,13 @@ value = os.environ['VARIABLE_NAME']
 
 ## Available Commands
 
-**69 commands available** on this system:
+**28 commands available** on this system:
 
 ```
-apt, apt-get, awk, bundle, cat, clang, clang++, cmake, code, composer, conda, curl, docker, dotnet, dpkg, find, g++, gcc, gem, gh, git, go, gradle, grep, gunzip, gzip, head, helm, htop, java, javac, jq, kubectl, make, nano, node, npm, npx, perl, php, pip, pipx, pnpm, python, python3, rsync, ruby, scp, sed, sort, sqlite3, ssh, tail, tar, top, tree, uniq, unzip, uv, vim, watch, wc, wget, whereis, which, xargs, xz, yarn, zip
+choco, code, conda, convert, curl, docker, ffmpeg, find, gh, git, go, kubectl, node, npm, npx, pandoc, ping, pip, pnpm, python, python3, scp, sort, ssh, tar, tree, uv, winget
 ```
 
-**42 commands NOT available**: 7z, 7za, aws, az, brew, cargo, choco, convert, dnf, emacs, fd, ffmpeg, gcloud, hg, maven, mongo, mongosh, msbuild, mysql, nc ...
+**83 commands NOT available**: 7z, 7za, apt, apt-get, awk, aws, az, brew, bundle, cargo, cat, clang, clang++, cmake, composer, dnf, dotnet, dpkg, emacs, fd ...
 
 ### Using Commands via shutil/subprocess
 

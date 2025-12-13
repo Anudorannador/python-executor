@@ -24,9 +24,13 @@ git clone https://github.com/Anudorannador/python-executor.git
 cd python-executor
 uv tool install -e ".[full]"
 
-# Create your .env file for database/API credentials
-cp .env.example .env
-# Edit .env with your credentials
+# Create user config directory and .env file
+# Windows:
+mkdir %APPDATA%\pyx
+copy .env.example %APPDATA%\pyx\.env
+# Unix/macOS:
+mkdir -p ~/.config/pyx
+cp .env.example ~/.config/pyx/.env
 
 # Verify installation
 pyx info
@@ -47,7 +51,7 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | `pyx info --commands` | Show 111 available commands detection |
 | `pyx info --json` | Output as JSON (for programmatic use) |
 | `pyx gi` | Generate LLM instructions (alias for generate-instructions) |
-| `pyx gi -o path` | Save to custom path (default: $PYX_LLM_INSTRUCTIONS_PATH) |
+| `pyx gi -o path` | Save to custom path (default: `$PYX_LLM_INSTRUCTIONS_PATH` or `./docs/pyx.instructions.md`) |
 | `pyx gi --ask` | Ask before replacing (default: auto-backup) |
 | `pyx gi --print` | Print markdown to stdout instead of saving |
 | `pyx run --code "..."` | Run inline Python code |
@@ -143,7 +147,7 @@ Add to VS Code `settings.json`:
 
 ### Option 2: Instruction Prompt
 
-Tell LLM to use `pyx` instead of shell commands. See [docs/llm-instructions.md](docs/llm-instructions.md) for a complete example.
+Tell LLM to use `pyx` instead of shell commands. See [docs/pyx.instructions.md](docs/pyx.instructions.md) for a complete example.
 
 **Generate environment-specific instructions:**
 
@@ -151,7 +155,7 @@ Tell LLM to use `pyx` instead of shell commands. See [docs/llm-instructions.md](
 # Generate instructions based on your current system
 pyx generate-instructions
 
-# This creates ./docs/llm-instructions.md with:
+# This creates ./docs/pyx.instructions.md with:
 # - Current OS/shell/Python info
 # - Dynamically tested shell syntax support
 # - Environment variables with guessed usage
@@ -174,10 +178,15 @@ Quick version — add to VS Code `prompts/global.instructions.md`:
 
 ## Environment Variables
 
-Create `.env` in the python-executor directory for global config (e.g., database URLs):
+pyx loads `.env` files from two locations (later overrides earlier):
+
+1. **User config**: `%APPDATA%\pyx\.env` (Windows) or `~/.config/pyx/.env` (Unix)
+2. **Local**: `.env` in the current working directory
+
+Create a `.env` file for database URLs, API keys, etc.:
 
 ```bash
-# .env
+# %APPDATA%\pyx\.env (Windows) or ~/.config/pyx/.env (Unix)
 MYSQL_URL=mysql+pymysql://user:pass@host/db
 REDIS_URL=redis://:password@host:6379/0
 ```
@@ -189,7 +198,20 @@ import os
 url = os.environ['MYSQL_URL']
 ```
 
-The `.env` file is auto-loaded. Use `pyx info --env` to see available keys (values hidden).
+Use `pyx info --env` to see available keys (values hidden).
+
+### pyx Configuration Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PYX_LLM_INSTRUCTIONS_PATH` | Custom output path for `pyx gi`. If set, instructions are saved here instead of `./docs/pyx.instructions.md`. Useful for VS Code prompt files. |
+
+Example (in `%APPDATA%\pyx\.env`):
+```bash
+PYX_LLM_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.instructions.md
+```
+
+> **Note:** `PYX_*` variables are pyx internal configuration and are **excluded** from the generated instructions file.
 
 ## Optional Packages
 
@@ -223,10 +245,10 @@ uv tool install -e ".[full]"
 
 ```
 python-executor/
-├── .env              # Your local config (gitignored)
+├── .env.example      # Example config (copy to user config dir)
 ├── pyproject.toml
 ├── docs/
-│   └── llm-instructions.md
+│   └── pyx.instructions.md
 └── src/
     ├── pyx_core/     # Core library
     │   ├── constants.py    # Commands list, ENV_PATTERNS

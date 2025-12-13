@@ -35,9 +35,14 @@ def _iter_with_progress(iterable, show_progress: bool = False, **kwargs):
     return iterable
 
 
-# Get the python-executor package root directory (where .env should be)
-_PACKAGE_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
-_GLOBAL_ENV_PATH: Path = _PACKAGE_ROOT / ".env"
+# User config directory for .env file
+# Windows: %APPDATA%\pyx\.env
+# Unix: ~/.config/pyx/.env
+if sys.platform == "win32":
+    _USER_CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "pyx"
+else:
+    _USER_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "pyx"
+_USER_ENV_PATH = _USER_CONFIG_DIR / ".env"
 
 
 def _get_env_keys(env_path: Path) -> list[str]:
@@ -205,7 +210,7 @@ def get_environment_info(
     
     # Environment keys
     local_env_path = Path(".env")
-    global_keys = _get_env_keys(_GLOBAL_ENV_PATH) if include_env else []
+    user_keys = _get_env_keys(_USER_ENV_PATH) if include_env else []
     local_keys = _get_env_keys(local_env_path) if include_env else []
     
     # Commands
@@ -221,9 +226,9 @@ def get_environment_info(
         python_version=python_version,
         python_executable=python_executable,
         pyx_version=__version__,
-        global_env_keys=global_keys,
+        global_env_keys=user_keys,
         local_env_keys=local_keys,
-        global_env_path=str(_GLOBAL_ENV_PATH),
+        global_env_path=str(_USER_ENV_PATH),
         local_env_path=str(local_env_path.resolve()),
         commands=commands,
     )
@@ -282,7 +287,7 @@ def format_environment_info(
     if include_env:
         lines.append("=== Environment Keys ===")
         if info.global_env_keys:
-            lines.append(f"[Global: {info.global_env_path}]")
+            lines.append(f"[User config: {info.global_env_path}]")
             lines.append(f"  {', '.join(info.global_env_keys)}")
         if info.local_env_keys:
             lines.append(f"[Local: {info.local_env_path}]")

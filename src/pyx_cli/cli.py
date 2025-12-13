@@ -9,11 +9,28 @@ import argparse
 import base64
 import os
 import sys
+from pathlib import Path
 from typing import NoReturn
 
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.prompt import Confirm
 from rich.syntax import Syntax
+
+# Load .env files before importing pyx_core (which may use env vars)
+# Priority (later overrides earlier):
+# 1. User config: ~/.config/pyx/.env (Unix) or %APPDATA%\pyx\.env (Windows)
+# 2. Local .env from cwd
+if sys.platform == "win32":
+    _USER_CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "pyx"
+else:
+    _USER_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "pyx"
+_USER_ENV_PATH = _USER_CONFIG_DIR / ".env"
+
+if _USER_ENV_PATH.exists():
+    load_dotenv(_USER_ENV_PATH, override=False)
+# Local .env from cwd (overrides user config)
+load_dotenv(override=True)
 
 from pyx_core import (
     __version__,
@@ -74,8 +91,8 @@ def main() -> NoReturn | None:
 
     # generate-instructions command (alias: gi)
     gen_parser = subparsers.add_parser("generate-instructions", aliases=["gi"], help="Generate LLM instructions markdown file from environment info")
-    # Default path: PYX_LLM_INSTRUCTIONS_PATH env var, or ./docs/llm-instructions.md
-    default_output = os.environ.get("PYX_LLM_INSTRUCTIONS_PATH", "./docs/llm-instructions.md")
+    # Default path: PYX_LLM_INSTRUCTIONS_PATH env var, or ./docs/pyx.instructions.md
+    default_output = os.environ.get("PYX_LLM_INSTRUCTIONS_PATH", "./docs/pyx.instructions.md")
     gen_parser.add_argument("--output", "-o", type=str, default=default_output, help=f"Output path (default: $PYX_LLM_INSTRUCTIONS_PATH or {default_output})")
     gen_parser.add_argument("--ask", action="store_true", help="Ask before replacing existing file (default: auto-backup)")
     gen_parser.add_argument("--force", action="store_true", help="Overwrite without backup")

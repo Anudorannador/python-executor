@@ -88,9 +88,11 @@ def generate_instructions(
     if info is None:
         info = get_environment_info(show_progress=show_progress)
     
-    # Get env keys with guessed usage
+    # Get env keys with guessed usage (exclude PYX_* internal config vars)
     all_env_keys = info.global_env_keys + info.local_env_keys
-    env_keys_with_usage = get_env_with_usage(all_env_keys)
+    # Filter out pyx internal configuration variables
+    user_env_keys = [k for k in all_env_keys if not k.startswith("PYX_")]
+    env_keys_with_usage = get_env_with_usage(user_env_keys)
     
     # Build markdown
     lines: list[str] = []
@@ -98,7 +100,7 @@ def generate_instructions(
     # YAML frontmatter
     lines.append("---")
     lines.append('applyTo: "**"')
-    lines.append('name: "llm-instructions"')
+    lines.append('name: "pyx-instructions"')
     lines.append('description: "Auto-generated instructions for LLMs/Agents to use pyx instead of raw shell commands."')
     lines.append("---")
     lines.append("")
@@ -145,6 +147,37 @@ def generate_instructions(
     lines.append("# ❌ WRONG - Will fail on some platforms")
     lines.append("curl -s https://api.example.com | jq '.data'")
     lines.append("```")
+    lines.append("")
+    
+    # Critical: --base64 encoding instruction
+    lines.append("### ⚠️ CRITICAL: How to Use `--base64`")
+    lines.append("")
+    lines.append("**The `--base64` flag means YOU (the LLM) must base64-encode the Python code BEFORE passing it to pyx.**")
+    lines.append("")
+    lines.append("> This is NOT a pyx feature that auto-encodes your code. You must encode it yourself!")
+    lines.append("> This prevents shell escaping disasters with quotes, backslashes, regex, and special characters.")
+    lines.append("")
+    lines.append("**Example workflow:**")
+    lines.append("")
+    lines.append("1. Write your Python code:")
+    lines.append("   ```python")
+    lines.append("   import re")
+    lines.append("   text = open('file.txt').read()")
+    lines.append("   print(re.findall(r'\"([^\"]+)\"', text))")
+    lines.append("   ```")
+    lines.append("")
+    lines.append("2. Base64-encode it (you do this mentally or via your model's capabilities):")
+    lines.append("   ```")
+    lines.append("   aW1wb3J0IHJlCnRleHQgPSBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKQpwcmludChyZS5maW5kYWxsKHInXCIoW15cIl0rKVwiJywgdGV4dCkp")
+    lines.append("   ```")
+    lines.append("")
+    lines.append("3. Pass the encoded string to pyx:")
+    lines.append("   ```bash")
+    lines.append("   pyx run --base64 \"aW1wb3J0IHJlCnRleHQgPSBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKQpwcmludChyZS5maW5kYWxsKHInXCIoW15cIl0rKVwiJywgdGV4dCkp\" -y")
+    lines.append("   ```")
+    lines.append("")
+    lines.append("**Why?** Without base64 encoding, code like `print(\"hello\")` becomes a shell escaping nightmare.")
+    lines.append("With base64, the shell sees only safe alphanumeric characters—no quotes, no backslashes, no problems.")
     lines.append("")
     
     # Quick Reference

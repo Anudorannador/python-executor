@@ -7,20 +7,29 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from pyx_core import run_code, run_file, run_async_code, add_package, ensure_temp, get_environment_info, format_environment_info, generate_instructions, save_with_backup
+# Load .env files before importing pyx_core
+# Priority (later overrides earlier):
+# 1. User config: %APPDATA%\pyx\.env (Windows) or ~/.config/pyx/.env (Unix)
+# 2. Local .env from cwd
+if sys.platform == "win32":
+    _USER_CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "pyx"
+else:
+    _USER_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "pyx"
+_USER_ENV_PATH = _USER_CONFIG_DIR / ".env"
 
-logger = logging.getLogger("pyx-mcp")
-
-# Create MCP Server
-app = Server("pyx-mcp")
-
-
+if _USER_ENV_PATH.exists():
+    load_dotenv(_USER_ENV_PATH, override=False)
+load_dotenv(override=True)
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools"""
@@ -287,7 +296,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     elif name == "generate_llm_instructions":
         import json
         
-        output_path = arguments.get("output_path", "./docs/llm-instructions.md")
+        output_path = arguments.get("output_path", "./docs/pyx.instructions.md")
         save_to_file = arguments.get("save_to_file", False)
         backup_existing = arguments.get("backup_existing", True)
         

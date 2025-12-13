@@ -65,6 +65,8 @@ full = [
     "pywin32>=311; sys_platform == 'win32'",
     # Bloomberg API
     "blpapi>=3.25.11.1",
+    # Cryptocurrency Exchange API 
+    "ccxt>=4.5.27",
 ]
 
 [project.scripts]

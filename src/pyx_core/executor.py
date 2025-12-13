@@ -24,19 +24,24 @@ from dotenv import load_dotenv
 from .constants import DEFAULT_TIMEOUT
 
 
-# Get the python-executor package root directory (where .env should be)
-_PACKAGE_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
-_GLOBAL_ENV_PATH: Path = _PACKAGE_ROOT / ".env"
+# User config directory for .env file
+# Windows: %APPDATA%\pyx\.env
+# Unix: ~/.config/pyx/.env
+if sys.platform == "win32":
+    _USER_CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "pyx"
+else:
+    _USER_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "pyx"
+_USER_ENV_PATH = _USER_CONFIG_DIR / ".env"
 
 
 def _load_all_env() -> None:
-    """Load .env files: global (python-executor dir) first, then local (cwd).
-    Local values override global ones.
+    """Load .env files: user config first, then local (cwd).
+    Local values override user config.
     """
-    # Load global .env from python-executor directory
-    if _GLOBAL_ENV_PATH.exists():
-        load_dotenv(_GLOBAL_ENV_PATH, override=False)
-    # Load local .env from current working directory (overrides global)
+    # Load user config .env (%APPDATA%\pyx\.env or ~/.config/pyx/.env)
+    if _USER_ENV_PATH.exists():
+        load_dotenv(_USER_ENV_PATH, override=False)
+    # Load local .env from current working directory (overrides user config)
     load_dotenv(override=True)
 
 
