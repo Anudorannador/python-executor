@@ -19,7 +19,7 @@ Shell commands fail across platforms. Use `pyx` to avoid these problems:
 |---------|-----------------|----------------|
 | **Variables** | `%VAR%` (Windows) vs `$VAR` (Unix) | `pyx run --code "import os; print(os.environ['VAR'])"` |
 | **Chaining** | `&&` / `&` / `;` differ by shell | `pyx run --code "func1(); func2()"` |
-| **Quoting** | Nested `"` `'` `` ` `` hell | `pyx run --base64 "..." -y` |
+| **Quoting** | Nested `"` `'` `` ` `` hell | `pyx run --base64 "..."` |
 | **Missing tools** | `curl`, `jq`, `grep` not on Windows | Use `requests`, `json`, Python stdlib |
 | **Escaping** | `\` vs `^` vs `` ` `` | Native Python strings |
 
@@ -29,13 +29,20 @@ Shell commands fail across platforms. Use `pyx` to avoid these problems:
 
 **NEVER generate raw shell commands. ALWAYS use `pyx`.**
 
-**Prefer `--base64` with `--cwd` for complex code:**
+**Prefer `--base64` with `--cwd` for complex code.**
+
+If you need to run an external command (even if it is listed as available), run it via Python `subprocess` **inside** `pyx run --base64`.
+This avoids shell-escaping issues and prevents the outer shell from interpreting special characters.
+
+**Do NOT pass `-y/--yes` when using `--base64`. Always require an explicit confirmation.**
+
+**Examples:**
 
 ```bash
 # ✅ BEST - Works everywhere, no escaping issues
-pyx run --cwd "/project/path" --base64 "BASE64_ENCODED_CODE" -y
+pyx run --cwd "/project/path" --base64 "BASE64_ENCODED_CODE"
 
-# ✅ GOOD - For simple one-liners
+# ✅ OK - For pure-Python one-liners (no subprocess, no complex quoting)
 pyx run --code "print('hello')"
 
 # ❌ WRONG - Will fail on some platforms
@@ -65,7 +72,7 @@ curl -s https://api.example.com | jq '.data'
 
 3. Pass the encoded string to pyx:
    ```bash
-   pyx run --base64 "aW1wb3J0IHJlCnRleHQgPSBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKQpwcmludChyZS5maW5kYWxsKHInXCIoW15cIl0rKVwiJywgdGV4dCkp" -y
+   pyx run --base64 "aW1wb3J0IHJlCnRleHQgPSBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKQpwcmludChyZS5maW5kYWxsKHInXCIoW15cIl0rKVwiJywgdGV4dCkp"
    ```
 
 **Why?** Without base64 encoding, code like `print("hello")` becomes a shell escaping nightmare.
@@ -79,7 +86,7 @@ With base64, the shell sees only safe alphanumeric characters—no quotes, no ba
 |------|---------|
 | **Check environment first** | `pyx info` |
 | **Run simple code** | `pyx run --code "print('hello')"` |
-| **Run complex code (PREFERRED)** | `pyx run --cwd "/path" --base64 "BASE64_CODE" -y` |
+| **Run complex code (PREFERRED)** | `pyx run --cwd "/path" --base64 "BASE64_CODE"` |
 | **Run in directory** | `pyx run --cwd "/path" --code "..."` |
 | **Run with timeout** | `pyx run --code "..." --timeout 30` |
 | **Run async code** | `pyx run --code "await ..." --async` |
@@ -140,6 +147,10 @@ value = os.environ['VARIABLE_NAME']
 
 ## Available Commands
 
+These are external CLI programs present on this system.
+Do **not** paste them as raw shell commands.
+If you need to execute one, do it via Python `subprocess` **inside** `pyx run --base64`.
+
 **28 commands available** on this system:
 
 ```
@@ -150,7 +161,10 @@ choco, code, conda, convert, curl, docker, ffmpeg, find, gh, git, go, kubectl, n
 
 ### Using Commands via shutil/subprocess
 
-For commands listed above, use `shutil.which()` to check availability and `subprocess` to run:
+For commands listed above, use `shutil.which()` to check availability and `subprocess` to run.
+When you do this as an LLM/agent, **wrap the Python in `pyx run --base64`** (do not paste the raw command to the shell).
+
+Note: `shutil` does not execute external commands. It provides helpers like `shutil.which()` and file operations.
 
 ```python
 import shutil
@@ -162,18 +176,25 @@ if shutil.which('git'):
     print(result.stdout)
 ```
 
+**✅ Required execution pattern (external commands):**
+
+```bash
+# Always run the Python (that calls subprocess) via --base64
+pyx run --base64 "BASE64_ENCODED_PYTHON_THAT_USES_SUBPROCESS"
+```
+
 **⚠️ IMPORTANT with `--cwd`**: When using `pyx run --cwd`, the working directory changes BEFORE code runs.
 Use absolute paths or ensure paths are relative to the new cwd:
 
 ```bash
 # ❌ WRONG - relative path may not exist in --cwd directory
-pyx run --cwd /other/dir --code "subprocess.run(['cat', 'file.txt'])"
+pyx run --cwd /other/dir --base64 "BASE64(subprocess.run([...]))"
 
 # ✅ CORRECT - use absolute path
-pyx run --cwd /other/dir --code "subprocess.run(['cat', '/original/path/file.txt'])"
+pyx run --cwd /other/dir --base64 "BASE64(subprocess.run([...]))"
 
 # ✅ CORRECT - file exists in --cwd directory
-pyx run --cwd /project --code "subprocess.run(['git', 'status'])"  # git operates on /project
+pyx run --cwd /project --base64 "BASE64(subprocess.run([...]))"  # external command executes within /project
 ```
 
 ---
@@ -220,20 +241,22 @@ When code contains `"`, `'`, `\`, regex, or newlines:
 python -c "import re; print(re.findall(r'\"([^\"]+)\"', open('file.txt').read()))"
 
 # ✅ pyx - encode as base64, no escaping needed
-pyx run --base64 "aW1wb3J0IHJlCnByaW50KHJlLmZpbmRhbGwocidcIihbXlwiXSspXCInLCBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKSkp" -y
+pyx run --base64 "aW1wb3J0IHJlCnByaW50KHJlLmZpbmRhbGwocidcIihbXlwiXSspXCInLCBvcGVuKCdmaWxlLnR4dCcpLnJlYWQoKSkp"
 ```
 
 ---
 
 ## Rules for LLM/Agent
 
-1. **NEVER** use raw shell commands (`curl`, `grep`, `echo`, etc.)
-2. **ALWAYS** use `pyx run --cwd "..." --base64 "..." -y` for complex code
-3. **USE** `pyx run --code "..."` only for simple one-liners
-4. **USE** `--timeout` for potentially long operations
-5. **USE** `--cwd` instead of `cd && ...`
-6. **CHECK** `pyx info` if unsure about the environment
-7. **USE** Python libraries instead of shell tools:
+1. **NEVER** paste raw shell commands (`curl`, `grep`, `echo`, etc.)
+2. **IF you need an external command**, call it via Python `subprocess` and execute that Python with `pyx run --base64 "..."` (required)
+3. **DO NOT** pass `-y/--yes` with `--base64` (must require confirmation)
+4. **PREFER** `pyx run --base64` whenever quoting/regex/JSON/paths/special characters are involved
+5. **USE** `pyx run --code "..."` only for pure-Python, simple one-liners (no subprocess)
+6. **USE** `--timeout` for potentially long operations
+7. **USE** `--cwd` instead of `cd && ...`
+8. **CHECK** `pyx info` if unsure about the environment
+9. **USE** Python libraries instead of shell tools:
    - `requests` instead of `curl`
    - `json` module instead of `jq`
    - `pathlib` instead of `find`/`dir`

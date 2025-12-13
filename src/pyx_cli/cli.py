@@ -70,7 +70,7 @@ def main() -> NoReturn | None:
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
     run_group.add_argument("--file", "-f", type=str, help="Path to a Python script file. Use -- to pass args to script.")
     run_group.add_argument("--base64", "-b", type=str, help="Base64-encoded Python code to execute (avoids shell escaping issues)")
-    run_parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompt for base64 code")
+    run_parser.add_argument("--yes", "-y", action="store_true", help="(Deprecated) Not allowed with --base64; kept for compatibility")
     run_parser.add_argument("script_args", nargs="*", help="Arguments to pass to the script (after --)")
 
     # add command
@@ -134,6 +134,9 @@ def main() -> NoReturn | None:
                 print(result.traceback, file=sys.stderr)
             sys.exit(0 if result.success else 1)
         elif args.base64:
+            if args.yes:
+                print("Error: -y/--yes is not allowed with --base64 (confirmation is required).", file=sys.stderr)
+                sys.exit(2)
             try:
                 code = base64.b64decode(args.base64).decode("utf-8")
             except Exception as e:
@@ -145,11 +148,10 @@ def main() -> NoReturn | None:
             console.print(Syntax(code, "python", theme="monokai", line_numbers=True))
             console.print()
             
-            # Ask for confirmation unless -y is specified
-            if not args.yes:
-                if not Confirm.ask("Execute this code?", default=True):
-                    console.print("[dim]Cancelled.[/dim]")
-                    sys.exit(0)
+            # Always require confirmation for base64 code
+            if not Confirm.ask("Execute this code?", default=True):
+                console.print("[dim]Cancelled.[/dim]")
+                sys.exit(0)
             
             if is_async:
                 result = run_async_code(code, timeout=timeout)

@@ -24,7 +24,7 @@ COMMON_COMMANDS: dict[str, list[str]] = {
     # Package Managers - Language
     "pkg_lang": [
         "npm", "npx", "yarn", "pnpm",  # JavaScript
-        "pip", "uv", "pipx", "conda",   # Python
+        "pip", "uv", "pipx", "conda", "poetry", "pipenv",  # Python
         "cargo", "rustup",              # Rust
         "go",                           # Go
         "composer",                     # PHP
@@ -52,7 +52,7 @@ COMMON_COMMANDS: dict[str, list[str]] = {
     
     # Programming Languages
     "languages": [
-        "python", "python3",
+        "python", "python3", "py",
         "node",
         "java", "javac",
         "go",
@@ -61,6 +61,12 @@ COMMON_COMMANDS: dict[str, list[str]] = {
         "php",
         "perl",
         "dotnet",
+    ],
+
+    # Python Dev Tools
+    "python_tools": [
+        "pytest", "tox",
+        "ruff", "black", "isort", "mypy",
     ],
     
     # Compilers & Build Tools
@@ -112,6 +118,7 @@ COMMON_COMMANDS: dict[str, list[str]] = {
     
     # Utilities
     "utils": [
+        "pwsh", "powershell",
         "ffmpeg",
         "convert",  # ImageMagick
         "pandoc",
