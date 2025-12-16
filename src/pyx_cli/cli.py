@@ -661,7 +661,6 @@ def main() -> NoReturn | None:
         )
         
         if args.as_json:
-            import json
             from dataclasses import asdict
             print(json.dumps(asdict(info), indent=2))
         else:
@@ -675,8 +674,6 @@ def main() -> NoReturn | None:
             print(output)
         sys.exit(0)
     elif args.command in ("generate-instructions", "gi"):
-        from pathlib import Path
-
         output_path = Path(args.output)
         
         markdown: str

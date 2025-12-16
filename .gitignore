@@ -15,6 +15,7 @@ wheels/
 !.env.example
 
 temp/
+.temp/
 uv.lock
 
 docs/pyx.*.instructions.md.bak*
