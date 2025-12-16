@@ -14,6 +14,14 @@ When LLMs generate shell commands, they often fail due to platform differences:
 | Missing tools | `curl`, `jq`, `grep` | Pre-installed packages |
 | Environment | Manual setup | Auto-loads `.env` files |
 
+### Strict Prompting (PYX_STRICT_JSON_IO)
+
+If you include the exact phrase `PYX_STRICT_JSON_IO` in your prompt, the generated instructions treat it as a **strict-mode trigger** that forces a safer workflow:
+
+- **Input must be JSON on disk** (no huge payloads in CLI args)
+- **Output must be written to a file** (prevents token blow-ups)
+- **Small outputs can be included fully**, but **large outputs must be size-checked** and only sliced/searched before feeding into the LLM
+
 ## Quick Start (Local Development)
 
 > **Note**: This tool is designed for local development. Use editable mode so you can customize packages and `.env` configuration.
@@ -37,6 +45,8 @@ pyx info
 pyx run --code "print('hello')"
 ```
 
+`pyx run` writes output to a file by default (see the printed `Output saved: ...` path under `.temp/`).
+
 After installation, `pyx` (or `python-executor`) is available globally from any directory.
 
 ## CLI Usage
@@ -50,14 +60,10 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | `pyx info --env` | Show only environment variable keys |
 | `pyx info --commands` | Show 111 available commands detection |
 | `pyx info --json` | Output as JSON (for programmatic use) |
-| `pyx gi pyx-usage` | Generate pyx-usage instructions (teaches LLM to use pyx instead of shell) |
-| `pyx gi pyx-usage -o path` | Save to custom path (default: `$PYX_PYX_INSTRUCTIONS_PATH` or `./docs/pyx.pyx.instructions.md`) |
-| `pyx gi shell-usage` | Generate shell-usage instructions (teaches LLM how to use current shell) |
-| `pyx gi shell-usage -o path` | Save to custom path (default: `$PYX_SHELL_INSTRUCTIONS_PATH` or `./docs/pyx.shell.instructions.md`) |
-| `pyx gi pyx-help` | Generate a help-capture markdown (collects `pyx --help` + all subcommand `--help`) |
-| `pyx gi pyx-help -o path` | Save to custom path (default: `$PYX_PYX_HELP_INSTRUCTIONS_PATH` or `./docs/pyx.pyx-help.instructions.md`) |
-| `pyx gi <type> --ask` | Ask before replacing (default: auto-backup) |
-| `pyx gi <type> --print` | Print markdown to stdout instead of saving |
+| `pyx gi` | Generate a single combined instructions file |
+| `pyx gi -o path` | Save to custom path (default: `$PYX_INSTRUCTIONS_PATH` or `./docs/pyx.instructions.md`) |
+| `pyx gi --ask` | Ask before replacing (default: auto-backup) |
+| `pyx gi --print` | Print markdown to stdout instead of saving |
 | `pyx run --code "..."` | Run inline Python code |
 | `pyx run --code "..." --async` | Run async code (supports top-level await) |
 | `pyx run --code "..." --timeout 10` | Run with 10s timeout (kills infinite loops) |
@@ -65,6 +71,8 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | `pyx run --file "path.py"` | Run a Python script file |
 | `pyx run --file "path.py" -- args` | Run script with arguments |
 | `pyx run --cwd "dir" --code "..."` | Run code in specified directory |
+| `pyx run --input-path "in.json" --file "task.py"` | Provide JSON input via `PYX_INPUT_PATH` |
+| `pyx run --output-path "out.txt" --file "task.py"` | Force output file path (default: `.temp/<task>.<timestamp>.output.txt`) |
 | `pyx python` | Launch the pyx Python interpreter (REPL) |
 | `pyx add --package "name"` | Install a package to optional dependencies |
 | `pyx ensure-temp` | Ensure temp directory exists |
@@ -75,13 +83,34 @@ If your payload contains regex, quotes, backslashes, JSON, `&`, or any other spe
 Instead, write a `.py` file and run it with `--file`:
 
 ```bash
-pyx ensure-temp
-# Write code to temp/pyx_task.py
-pyx run --file "temp/pyx_task.py" -- --args
+pyx ensure-temp --dir ".temp"
+# Write code to .temp/pyx_task.py
+pyx run --file ".temp/pyx_task.py" -- --args
 ```
 
 > **Note**: `--base64` is supported but is legacy/interactive in this CLI (it shows decoded code and asks for confirmation).
 > `-y/--yes` is deprecated and is not allowed with `--base64`.
+
+### Preventing Output Explosions (Recommended: Input JSON + Output File)
+
+LLM contexts are sensitive to huge outputs (1000-line files, tickers, large DB query results). To avoid token blow-ups and unusable logs, use this workflow:
+
+- **Always write a script** under `.temp/`.
+- **All inputs** go into a JSON file: `.temp/<task>.<variant>.input.json`.
+- **All outputs** go into a file: `.temp/<task>.<variant>.output.txt` (or `.json` when appropriate).
+- **Stdout is only a summary**: output path + size + small preview (head/tail) or keyword hits.
+
+Naming convention example:
+
+- `.temp/fetch_rates.py`
+- `.temp/fetch_rates.a.input.json` -> `.temp/fetch_rates.a.output.txt`
+- `.temp/fetch_rates.a2.input.json` -> `.temp/fetch_rates.a2.output.txt`
+
+Before reading any output into the LLM, **check size/line-count first** and only load a slice (or search keywords) when the file is large.
+
+`pyx run` is designed to support this workflow: it always sets `PYX_OUTPUT_PATH`, and you can optionally pass `--input-path` / `--output-path` to standardize I/O.
+
+If you want to hard-enforce this workflow in prompting, include the exact phrase `PYX_STRICT_JSON_IO` in your prompt; the generated instructions treat it as a strict-mode trigger.
 
 ## LLM/Agent Integration
 
@@ -153,22 +182,14 @@ Add to VS Code `settings.json`:
 
 ### Option 2: Instruction Prompt
 
-Tell LLM to use `pyx` instead of shell commands. See [docs/pyx.pyx.instructions.md](docs/pyx.pyx.instructions.md) for a complete example.
+Tell LLM to use `pyx` instead of shell commands. Prefer the combined instructions file: [docs/pyx.instructions.md](docs/pyx.instructions.md).
 
 **Generate environment-specific instructions:**
 
 ```bash
-# Generate pyx-usage instructions (teaches LLM to use pyx instead of shell)
-pyx gi pyx-usage
-# This creates ./docs/pyx.pyx.instructions.md
-
-# Generate shell-usage instructions (teaches LLM how to use current shell)
-pyx gi shell-usage
-# This creates ./docs/pyx.shell.instructions.md
-
-# Generate pyx-help instructions (captures pyx --help and all subcommand --help outputs)
-pyx gi pyx-help
-# This creates ./docs/pyx.pyx-help.instructions.md
+# Generate a single combined instructions file
+pyx gi
+# Default output: $PYX_INSTRUCTIONS_PATH or ./docs/pyx.instructions.md
 ```
 
 Quick version — add to VS Code `prompts/global.instructions.md`:
@@ -180,7 +201,7 @@ Quick version — add to VS Code `prompts/global.instructions.md`:
 - Run code: `pyx run --code "..."`
 - Run async: `pyx run --code "await ..." --async`
 - Run with timeout: `pyx run --code "..." --timeout 30`
-- Run file (recommended for LLM/agent): `pyx run --file "temp/pyx_task.py" -- ...`
+- Run file (recommended for LLM/agent): `pyx run --file ".temp/pyx_task.py" -- ...`
 - (Legacy) Run base64 (interactive): `pyx run --base64 "..."`
 - Launch interpreter: `pyx python`
 - Install: `pyx add --package "name"`
@@ -214,16 +235,13 @@ Use `pyx info --env` to see available keys (values hidden).
 
 | Variable | Description |
 |----------|-------------|
-| `PYX_PYX_INSTRUCTIONS_PATH` | Custom output path for `pyx gi pyx-usage`. Default: `./docs/pyx.pyx.instructions.md`. |
-| `PYX_PYX_INSTRUCTIONS_STYLE` | Default instruction style for `pyx gi pyx-usage`. Allowed: `file` (recommended) or `base64` (legacy). |
-| `PYX_SHELL_INSTRUCTIONS_PATH` | Custom output path for `pyx gi shell-usage`. Default: `./docs/pyx.shell.instructions.md`. |
-| `PYX_PYX_HELP_INSTRUCTIONS_PATH` | Custom output path for `pyx gi pyx-help`. Default: `./docs/pyx.pyx-help.instructions.md`. |
+| `PYX_INSTRUCTIONS_PATH` | Output path for `pyx gi`. Default: `./docs/pyx.instructions.md`. |
+| `PYX_PYX_INSTRUCTIONS_STYLE` | pyx-usage section style in the combined file. Allowed: `file` (recommended) or `base64` (legacy). |
 
 Example (in `%APPDATA%\pyx\.env`):
+
 ```bash
-PYX_PYX_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.pyx.instructions.md
-PYX_SHELL_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.shell.instructions.md
-PYX_PYX_HELP_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.pyx-help.instructions.md
+PYX_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.instructions.md
 ```
 
 > **Note:** `PYX_*` variables are pyx internal configuration and are **excluded** from the generated instructions file.
@@ -243,29 +261,32 @@ uv tool install -e ".[full]"
 | Category | Packages |
 |----------|----------|
 | AWS | boto3 |
-| Database | pymysql, redis, sqlalchemy |
-| Data | numpy, pandas, orjson, pydantic |
-| HTTP | requests, httpx, aiohttp, paramiko |
-| Excel/Office | openpyxl, xlrd, xlsxwriter, python-docx, pypdf |
-| Web Scraping | beautifulsoup4, lxml, chardet |
-| CLI/Display | tabulate, tqdm |
-| Image | pillow, matplotlib |
-| Text | markdown, jinja2, pyyaml |
 | Security | cryptography |
 | Date/Time | dateparser, arrow, pytz |
 | Microsoft | exchangelib, msal |
+| Data | numpy, pandas, orjson, pydantic |
+| Excel/Office | openpyxl, xlrd, xlsxwriter, python-docx, pypdf |
+| Database | pymysql, redis, sqlalchemy |
+| HTTP/Network | requests, httpx, aiohttp, paramiko |
+| Web Scraping | beautifulsoup4, lxml, chardet |
+| Text | markdown, jinja2, pyyaml |
+| Image | pillow, matplotlib |
+| CLI/Display | tabulate, tqdm |
 | Utilities | pyperclip, wrapt, pywin32 (Windows) |
+| Bloomberg API | blpapi |
+| Crypto Exchange API | ccxt |
 
 ## Project Structure
 
-```
+```text
 python-executor/
 ├── .env.example      # Example config (copy to user config dir)
 ├── pyproject.toml
 ├── docs/
-│   ├── pyx.pyx.instructions.md    # pyx-usage instructions (use pyx instead of shell)
-│   ├── pyx.shell.instructions.md  # shell-usage instructions (how to use current shell)
-│   └── pyx.pyx-help.instructions.md  # pyx-help instructions (pyx --help and subcommands)
+│   ├── pyx.instructions.md        # Combined instructions (recommended)
+│   ├── pyx.pyx.instructions.md    # (Legacy) pyx-usage instructions
+│   ├── pyx.shell.instructions.md  # (Legacy) shell-usage instructions
+│   └── pyx.pyx-help.instructions.md  # (Legacy) help snapshot
 └── src/
     ├── pyx_core/     # Core library
     │   ├── constants.py    # Commands list, ENV_PATTERNS

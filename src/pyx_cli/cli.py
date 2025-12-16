@@ -9,7 +9,13 @@ import argparse
 import base64
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
+import shutil
+import site
+import importlib
+import importlib.metadata
+import re
 from typing import NoReturn
 
 from dotenv import load_dotenv
@@ -47,6 +53,31 @@ from pyx_core import (  # noqa: E402
 )
 
 console = Console()
+
+
+def _redact_markdown(markdown: str) -> str:
+    """Redact common local/PII paths and credential-like URLs from generated docs.
+
+    Goal: keep the document useful while removing user-specific filesystem details.
+    """
+    redacted = markdown
+
+    # Redact the current user's home directory while preserving Windows-ness.
+    try:
+        home = str(Path.home())
+        if home:
+            redacted = redacted.replace(home, r"C:\Users\<REDACTED_USER>")
+    except Exception:
+        pass
+
+    # Redact VS Code profile ids inside typical prompts paths.
+    # Example: ...\profiles\-7c411965\prompts\...
+    redacted = re.sub(r"(\\profiles\\)[^\\]+(\\prompts\\)", r"\1<REDACTED_PROFILE>\2", redacted, flags=re.IGNORECASE)
+
+    # Redact credential-like URLs if they ever appear.
+    redacted = re.sub(r"\b(mysql\+pymysql|mysql|postgres|redis)://[^\s]+", r"<REDACTED_URL>", redacted, flags=re.IGNORECASE)
+
+    return redacted
 
 
 def _append_help_section(lines: list[str], title: str, help_text: str) -> None:
@@ -125,6 +156,218 @@ def _generate_pyx_help_instructions_markdown(parser: argparse.ArgumentParser) ->
     return "\n".join(lines)
 
 
+def _strip_frontmatter(markdown: str) -> str:
+    """Remove a leading YAML frontmatter block if present."""
+    lines = markdown.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return markdown
+    # Find closing '---'
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            rest = lines[i + 1 :]
+            # Drop a single leading blank line after frontmatter
+            if rest and rest[0].strip() == "":
+                rest = rest[1:]
+            return "\n".join(rest)
+    return markdown
+
+
+def _extract_from_heading(markdown: str, heading_prefix: str) -> str:
+    """Return markdown starting from the first line that begins with heading_prefix.
+
+    If not found, returns the original markdown.
+    """
+    lines = markdown.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith(heading_prefix):
+            return "\n".join(lines[i:])
+    return markdown
+
+
+def _build_combined_instructions_markdown(
+    parser: argparse.ArgumentParser,
+    style: str,
+) -> tuple[str, dict[str, object]]:
+    pyx_result = generate_pyx_instructions(show_progress=True, style=style)
+    if not pyx_result.success:
+        raise RuntimeError(pyx_result.error or "Failed to generate pyx-usage instructions")
+
+    shell_result = generate_shell_instructions(show_progress=True)
+    if not shell_result.success:
+        raise RuntimeError(shell_result.error or "Failed to generate shell-usage instructions")
+
+    help_md = _generate_pyx_help_instructions_markdown(parser)
+
+    # Avoid duplication: shell-usage repeats environment + env vars + commands.
+    # Keep only the shell-specific guidance section(s).
+    shell_body = _strip_frontmatter(shell_result.markdown)
+    shell_body = _extract_from_heading(shell_body, "## Shell Overview")
+
+    def _format_paths_section() -> str:
+        parts: list[str] = []
+        parts.append("## pyx installation")
+        parts.append("")
+        parts.append("### Paths")
+        parts.append("")
+
+        pyx_bin = shutil.which("pyx")
+        pyx_mcp_bin = shutil.which("pyx-mcp")
+
+        parts.append("```text")
+        parts.append(f"pyx executable: {pyx_bin or '<not found on PATH>'}")
+        parts.append(f"pyx-mcp executable: {pyx_mcp_bin or '<not found on PATH>'}")
+        parts.append(f"pyx Python (sys.executable): {sys.executable}")
+        parts.append("```")
+        parts.append("")
+
+        parts.append("### Module locations")
+        parts.append("")
+        module_names = ["pyx_core", "pyx_cli", "pyx_mcp"]
+        parts.append("```text")
+        for name in module_names:
+            try:
+                mod = importlib.import_module(name)
+                mod_file = getattr(mod, "__file__", None)
+                parts.append(f"{name}.__file__: {mod_file}")
+            except Exception as e:
+                parts.append(f"{name}.__file__: <error: {e}>")
+        parts.append("```")
+        parts.append("")
+
+        parts.append("### Python site-packages")
+        parts.append("")
+        parts.append("```text")
+        try:
+            for p in site.getsitepackages():
+                parts.append(f"site-packages: {p}")
+        except Exception as e:
+            parts.append(f"site.getsitepackages(): <error: {e}>")
+        try:
+            parts.append(f"user-site: {site.getusersitepackages()}")
+        except Exception as e:
+            parts.append(f"site.getusersitepackages(): <error: {e}>")
+        parts.append("```")
+        parts.append("")
+
+        # Best-effort repo root guess (useful for editable installs)
+        parts.append("### Quick update / reinstall")
+        parts.append("")
+        repo_root_guess: str | None = None
+        try:
+            cli_mod = importlib.import_module("pyx_cli")
+            cli_file = Path(getattr(cli_mod, "__file__", "")).resolve()
+            # If installed from source, the module path often looks like: <repo>/src/pyx_cli/__init__.py
+            if "src" in cli_file.parts:
+                src_index = cli_file.parts.index("src")
+                repo_root_guess = str(Path(*cli_file.parts[:src_index]).resolve())
+        except Exception:
+            repo_root_guess = None
+
+        parts.append("If you are developing from the source repo (editable install), update/reinstall from the repo root:")
+        parts.append("")
+        parts.append("```bash")
+        if repo_root_guess:
+            parts.append(f"# Repo root (best guess): {repo_root_guess}")
+        parts.append("# Reinstall pyx in editable mode")
+        parts.append('uv tool install -e ".[full]"')
+        parts.append("```")
+        parts.append("")
+        parts.append("Notes:")
+        parts.append("")
+        parts.append("- If `pyx_cli.__file__` points into `site-packages`, you are likely using a non-editable install.")
+        parts.append("- To switch to editable development, clone the repo and run the command above from the repo root.")
+        parts.append("")
+
+        return "\n".join(parts)
+
+    def _format_installed_packages_section() -> str:
+        parts: list[str] = []
+        parts.append("## Installed Python packages (pyx environment)")
+        parts.append("")
+        try:
+            dists = list(importlib.metadata.distributions())
+            items: list[tuple[str, str]] = []
+            for d in dists:
+                name = (d.metadata.get("Name") or d.metadata.get("Summary") or "").strip() or d.metadata.get("name")
+                if not name:
+                    name = getattr(d, "name", None) or "<unknown>"
+                version = getattr(d, "version", None) or ""
+                items.append((str(name), str(version)))
+            items.sort(key=lambda x: x[0].lower())
+
+            parts.append(f"Total distributions: {len(items)}")
+            parts.append("")
+            parts.append("```text")
+            for name, version in items:
+                if version:
+                    parts.append(f"{name}=={version}")
+                else:
+                    parts.append(name)
+            parts.append("```")
+        except Exception as e:
+            parts.append(f"Failed to enumerate packages: {e}")
+        parts.append("")
+        return "\n".join(parts)
+
+    combined: list[str] = []
+    combined.append("---")
+    combined.append('applyTo: "**"')
+    combined.append('name: "pyx-instructions"')
+    combined.append('description: "Auto-generated combined instructions (pyx-usage + shell-usage + pyx-help)."')
+    combined.append("---")
+    combined.append("")
+    combined.append("# pyx Instructions")
+    combined.append("")
+    combined.append("This file combines:")
+    combined.append("")
+    combined.append("- pyx-usage (file-first + output explosion control)")
+    combined.append("- shell-usage (shell syntax guidance)")
+    combined.append("- pyx-help (CLI help output snapshot)")
+    combined.append("")
+    combined.append("---")
+    combined.append("")
+    combined.append("## pyx-usage")
+    combined.append("")
+    combined.append(_strip_frontmatter(pyx_result.markdown))
+    combined.append("")
+
+    combined.append("---")
+    combined.append("")
+    combined.append(_format_paths_section())
+    combined.append("")
+
+    combined.append("---")
+    combined.append("")
+    combined.append(_format_installed_packages_section())
+    combined.append("")
+
+    combined.append("---")
+    combined.append("")
+    combined.append("## shell-usage")
+    combined.append("")
+    combined.append(shell_body)
+    combined.append("")
+    combined.append("---")
+    combined.append("")
+    combined.append("## pyx-help")
+    combined.append("")
+    combined.append(_strip_frontmatter(help_md))
+    combined.append("")
+
+    summary: dict[str, object] = {
+        "os": pyx_result.raw_info.os_name,
+        "shell": pyx_result.raw_info.shell_type,
+        "python_version": pyx_result.raw_info.python_version,
+        "pyx_version": pyx_result.raw_info.pyx_version,
+        "syntax_patterns_count": len(pyx_result.raw_info.syntax_support),
+        "env_variables_count": len(pyx_result.env_keys_with_usage),
+        "available_commands_count": sum(1 for d in pyx_result.raw_info.commands.values() if d["available"]),
+        "total_commands_checked": len(pyx_result.raw_info.commands),
+    }
+
+    return "\n".join(combined), summary
+
+
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     parser = argparse.ArgumentParser(
         prog="pyx",
@@ -142,6 +385,22 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     run_parser.add_argument("--cwd", type=str, help="Change to this directory before execution")
     run_parser.add_argument("--timeout", "-t", type=float, help="Maximum execution time in seconds")
     run_parser.add_argument("--async", dest="is_async", action="store_true", help="Execute as async code (supports await)")
+    run_parser.add_argument(
+        "--input-path",
+        type=str,
+        help="Optional path to a JSON input file. Exposed to the script via env var PYX_INPUT_PATH.",
+    )
+    run_parser.add_argument(
+        "--output-path",
+        type=str,
+        help="Optional output file path. If not provided, pyx writes to .temp/<task>.<timestamp>.output.txt.",
+    )
+    run_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=".temp",
+        help="Directory used for auto-generated outputs (default: .temp)",
+    )
     run_group = run_parser.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
     run_group.add_argument("--file", "-f", type=str, help="Path to a Python script file. Use -- to pass args to script.")
@@ -176,63 +435,32 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
         help="Arguments to pass through to the Python interpreter (e.g. -c, -m).",
     )
 
-    # generate-instructions command (alias: gi) with subcommands
+    # generate-instructions command (alias: gi)
     gen_parser = subparsers.add_parser(
         "generate-instructions",
         aliases=["gi"],
-        help="Generate LLM instructions markdown file from environment info",
+        help="Generate a single combined LLM instructions markdown file from environment info",
     )
-    gen_subparsers = gen_parser.add_subparsers(dest="gi_subcommand", help="Instruction type to generate")
 
-    # pyx-usage subcommand
-    default_pyx_output = os.environ.get("PYX_PYX_INSTRUCTIONS_PATH", "./docs/pyx.pyx.instructions.md")
-    default_pyx_style = os.environ.get("PYX_PYX_INSTRUCTIONS_STYLE", "file")
-    pyx_usage_parser = gen_subparsers.add_parser("pyx-usage", help="Generate instructions for using pyx instead of shell commands")
-    pyx_usage_parser.add_argument(
+    default_output = os.environ.get("PYX_INSTRUCTIONS_PATH", "./docs/pyx.instructions.md")
+    default_style = os.environ.get("PYX_PYX_INSTRUCTIONS_STYLE", "file")
+    gen_parser.add_argument(
         "--output",
         "-o",
         type=str,
-        default=default_pyx_output,
-        help=f"Output path (default: $PYX_PYX_INSTRUCTIONS_PATH or {default_pyx_output})",
+        default=default_output,
+        help=f"Output path (default: $PYX_INSTRUCTIONS_PATH or {default_output})",
     )
-    pyx_usage_parser.add_argument(
+    gen_parser.add_argument(
         "--style",
         type=str,
         choices=["file", "base64"],
-        default=default_pyx_style if default_pyx_style in ("file", "base64") else "file",
-        help="Instruction style: 'file' (recommended, file-first) or 'base64' (legacy). Default: $PYX_PYX_INSTRUCTIONS_STYLE or 'file'.",
+        default=default_style if default_style in ("file", "base64") else "file",
+        help="pyx-usage section style: 'file' (recommended) or 'base64' (legacy).",
     )
-    pyx_usage_parser.add_argument("--ask", action="store_true", help="Ask before replacing existing file (default: auto-backup)")
-    pyx_usage_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
-    pyx_usage_parser.add_argument("--print", dest="print_only", action="store_true", help="Print markdown to stdout instead of saving")
-
-    # shell-usage subcommand
-    default_shell_output = os.environ.get("PYX_SHELL_INSTRUCTIONS_PATH", "./docs/pyx.shell.instructions.md")
-    shell_usage_parser = gen_subparsers.add_parser("shell-usage", help="Generate instructions for using the current shell correctly")
-    shell_usage_parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default=default_shell_output,
-        help=f"Output path (default: $PYX_SHELL_INSTRUCTIONS_PATH or {default_shell_output})",
-    )
-    shell_usage_parser.add_argument("--ask", action="store_true", help="Ask before replacing existing file (default: auto-backup)")
-    shell_usage_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
-    shell_usage_parser.add_argument("--print", dest="print_only", action="store_true", help="Print markdown to stdout instead of saving")
-
-    # pyx-help subcommand
-    default_help_output = os.environ.get("PYX_PYX_HELP_INSTRUCTIONS_PATH", "./docs/pyx.pyx-help.instructions.md")
-    pyx_help_parser = gen_subparsers.add_parser("pyx-help", help="Generate a markdown file with `pyx --help` and all subcommand `--help` outputs")
-    pyx_help_parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default=default_help_output,
-        help=f"Output path (default: $PYX_PYX_HELP_INSTRUCTIONS_PATH or {default_help_output})",
-    )
-    pyx_help_parser.add_argument("--ask", action="store_true", help="Ask before replacing existing file (default: auto-backup)")
-    pyx_help_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
-    pyx_help_parser.add_argument("--print", dest="print_only", action="store_true", help="Print markdown to stdout instead of saving")
+    gen_parser.add_argument("--ask", action="store_true", help="Ask before replacing existing file (default: auto-backup)")
+    gen_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
+    gen_parser.add_argument("--print", dest="print_only", action="store_true", help="Print markdown to stdout instead of saving")
 
     return parser, gen_parser
 
@@ -244,37 +472,67 @@ def main() -> NoReturn | None:
     args = parser.parse_args()
 
     if args.command == "run":
+        def _resolve_output_path() -> Path:
+            if getattr(args, "output_path", None):
+                return Path(args.output_path)
+
+            out_dir = Path(getattr(args, "output_dir", ".temp") or ".temp")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            if getattr(args, "file", None):
+                base = Path(args.file).stem
+            elif getattr(args, "code", None):
+                base = "inline"
+            elif getattr(args, "base64", None):
+                base = "base64"
+            else:
+                base = "run"
+
+            return out_dir / f"{base}.{ts}.output.txt"
+
         # Handle --cwd option
         if args.cwd:
             if not os.path.isdir(args.cwd):
                 print(f"Error: Directory does not exist: {args.cwd}", file=sys.stderr)
                 sys.exit(1)
             os.chdir(args.cwd)
+            # Reload local .env from the new cwd (overrides user config)
+            load_dotenv(override=True)
+
+        output_path = _resolve_output_path().resolve()
+        os.environ["PYX_OUTPUT_PATH"] = str(output_path)
+        if getattr(args, "input_path", None):
+            os.environ["PYX_INPUT_PATH"] = str(Path(args.input_path).resolve())
         
         timeout = args.timeout if hasattr(args, 'timeout') else None
         is_async = args.is_async if hasattr(args, 'is_async') else False
         
         if args.code:
             if is_async:
-                result = run_async_code(args.code, timeout=timeout)
+                result = run_async_code(args.code, timeout=timeout, output_path=str(output_path))
             else:
-                result = run_code(args.code, capture_output=False, timeout=timeout)
-            if result.output:
-                print(result.output, end="")
-            if result.error:
+                result = run_code(args.code, capture_output=False, timeout=timeout, output_path=str(output_path))
+
+            try:
+                size = output_path.stat().st_size
+            except OSError:
+                size = -1
+            print(f"Output saved: {output_path} (bytes={size})")
+            if result.error and not result.success:
                 print(result.error, file=sys.stderr)
-            if result.traceback and not result.success:
-                print(result.traceback, file=sys.stderr)
             sys.exit(0 if result.success else 1)
         elif args.file:
             script_args = args.script_args if hasattr(args, 'script_args') else []
-            result = run_file(args.file, script_args=script_args, capture_output=False, timeout=timeout)
-            if result.output:
-                print(result.output, end="")
-            if result.error:
+            result = run_file(args.file, script_args=script_args, capture_output=False, timeout=timeout, output_path=str(output_path))
+
+            try:
+                size = output_path.stat().st_size
+            except OSError:
+                size = -1
+            print(f"Output saved: {output_path} (bytes={size})")
+            if result.error and not result.success:
                 print(result.error, file=sys.stderr)
-            if result.traceback and not result.success:
-                print(result.traceback, file=sys.stderr)
             sys.exit(0 if result.success else 1)
         elif args.base64:
             if args.yes:
@@ -297,15 +555,17 @@ def main() -> NoReturn | None:
                 sys.exit(0)
             
             if is_async:
-                result = run_async_code(code, timeout=timeout)
+                result = run_async_code(code, timeout=timeout, output_path=str(output_path))
             else:
-                result = run_code(code, capture_output=False, timeout=timeout)
-            if result.output:
-                print(result.output, end="")
-            if result.error:
+                result = run_code(code, capture_output=False, timeout=timeout, output_path=str(output_path))
+
+            try:
+                size = output_path.stat().st_size
+            except OSError:
+                size = -1
+            print(f"Output saved: {output_path} (bytes={size})")
+            if result.error and not result.success:
                 print(result.error, file=sys.stderr)
-            if result.traceback and not result.success:
-                print(result.traceback, file=sys.stderr)
             sys.exit(0 if result.success else 1)
     elif args.command == "python":
         # `.env` is loaded at module import time (see top of this file).
@@ -364,13 +624,7 @@ def main() -> NoReturn | None:
         sys.exit(0)
     elif args.command in ("generate-instructions", "gi"):
         from pathlib import Path
-        
-        # Check if subcommand was provided
-        if not hasattr(args, 'gi_subcommand') or args.gi_subcommand is None:
-            gen_parser.print_help()
-            console.print("\n[yellow]Please specify a subcommand: pyx-usage, shell-usage, or pyx-help[/yellow]")
-            sys.exit(1)
-        
+
         output_path = Path(args.output)
         
         markdown: str
@@ -378,45 +632,25 @@ def main() -> NoReturn | None:
         raw_info = None
         env_var_count: int | None = None
 
-        if args.gi_subcommand in ("pyx-usage", "shell-usage"):
-            # Generate instructions with progress bars
-            console.print("[bold blue]Collecting environment information...[/bold blue]")
-
-            if args.gi_subcommand == "pyx-usage":
-                style = getattr(args, "style", "file")
-                pyx_result = generate_pyx_instructions(show_progress=True, style=style)
-                instruction_type = "pyx-usage"
-            else:
-                shell_result = generate_shell_instructions(show_progress=True)
-                instruction_type = "shell-usage"
-
-            if args.gi_subcommand == "pyx-usage":
-                if not pyx_result.success:
-                    console.print(f"[red]Error: {pyx_result.error}[/red]")
-                    sys.exit(1)
-                markdown = pyx_result.markdown
-                raw_info = pyx_result.raw_info
-                env_var_count = len(pyx_result.env_keys_with_usage)
-            else:
-                if not shell_result.success:
-                    console.print(f"[red]Error: {shell_result.error}[/red]")
-                    sys.exit(1)
-                markdown = shell_result.markdown
-                raw_info = shell_result.raw_info
-        elif args.gi_subcommand == "pyx-help":
-            console.print("[bold blue]Generating pyx help output...[/bold blue]")
-            markdown = _generate_pyx_help_instructions_markdown(parser)
-            instruction_type = "pyx-help"
-        else:
-            console.print(f"[red]Unknown subcommand: {args.gi_subcommand}[/red]")
+        # Generate combined instructions
+        console.print("[bold blue]Collecting environment information...[/bold blue]")
+        style = getattr(args, "style", "file")
+        try:
+            markdown, summary = _build_combined_instructions_markdown(parser, style=style)
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
             sys.exit(1)
+
+        instruction_type = "instructions"
+        raw_info = None
+        env_var_count = summary.get("env_variables_count") if isinstance(summary, dict) else None
         
         # Print only mode
         if args.print_only:
             reconfigure = getattr(sys.stdout, "reconfigure", None)
             if callable(reconfigure):
                 reconfigure(encoding="utf-8")
-            print(markdown)
+            print(_redact_markdown(markdown))
             sys.exit(0)
         
         # Handle existing file - only ask if --ask flag is set (default: auto-backup)
@@ -433,25 +667,30 @@ def main() -> NoReturn | None:
         
         # Save the file
         success, saved_path, backup_path = save_with_backup(
-            markdown,
+            _redact_markdown(markdown),
             output_path,
             force=args.force,
         )
         
         if success:
-            console.print(f"\n[green]✓ Generated {instruction_type} instructions:[/green] {saved_path}")
+            console.print(f"\n[green]✓ Generated {instruction_type}:[/green] {saved_path}")
             if backup_path:
                 console.print(f"[dim]  Backup created: {backup_path}[/dim]")
 
-            if raw_info is not None:
-                # Show summary (environment-based instruction types)
-                console.print("\n[bold]Summary:[/bold]")
-                console.print(f"  • OS: {raw_info.os_name} ({raw_info.shell_type})")
-                console.print(f"  • Shell syntax patterns: {len(raw_info.syntax_support)}")
-                if env_var_count is not None:
-                    console.print(f"  • Environment variables: {env_var_count}")
-                available_cmds = sum(1 for d in raw_info.commands.values() if d["available"])
-                console.print(f"  • Available commands: {available_cmds}/{len(raw_info.commands)}")
+            console.print("\n[bold]Summary:[/bold]")
+            os_name = summary.get("os") if isinstance(summary, dict) else None
+            shell = summary.get("shell") if isinstance(summary, dict) else None
+            patterns = summary.get("syntax_patterns_count") if isinstance(summary, dict) else None
+            cmds = summary.get("available_commands_count") if isinstance(summary, dict) else None
+            total_cmds = summary.get("total_commands_checked") if isinstance(summary, dict) else None
+            if os_name and shell:
+                console.print(f"  • OS: {os_name} ({shell})")
+            if patterns is not None:
+                console.print(f"  • Shell syntax patterns: {patterns}")
+            if env_var_count is not None:
+                console.print(f"  • Environment variables: {env_var_count}")
+            if cmds is not None and total_cmds is not None:
+                console.print(f"  • Available commands: {cmds}/{total_cmds}")
         else:
             console.print("[red]Error saving file[/red]")
             sys.exit(1)

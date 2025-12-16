@@ -69,6 +69,14 @@ async def list_tools() -> list[Tool]:
                     "timeout": {
                         "type": "number",
                         "description": "Maximum execution time in seconds. If not specified, no timeout is applied."
+                    },
+                    "input_path": {
+                        "type": "string",
+                        "description": "Optional path to a JSON input file. The server will expose it via env var PYX_INPUT_PATH for your code to read."
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional path to write output text. When provided, the server will avoid returning large output and will instead write to this file (and return a short summary)."
                     }
                 },
                 "required": ["code"]
@@ -91,6 +99,14 @@ async def list_tools() -> list[Tool]:
                     "timeout": {
                         "type": "number",
                         "description": "Maximum execution time in seconds. If not specified, no timeout is applied."
+                    },
+                    "input_path": {
+                        "type": "string",
+                        "description": "Optional path to a JSON input file. The server will expose it via env var PYX_INPUT_PATH for your code to read."
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional path to write output text. When provided, the server will avoid returning large output and will instead write to this file (and return a short summary)."
                     }
                 },
                 "required": ["code"]
@@ -118,6 +134,14 @@ async def list_tools() -> list[Tool]:
                     "timeout": {
                         "type": "number",
                         "description": "Maximum execution time in seconds. If not specified, no timeout is applied."
+                    },
+                    "input_path": {
+                        "type": "string",
+                        "description": "Optional path to a JSON input file. The server will expose it via env var PYX_INPUT_PATH for your script to read."
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional path to write output text. When provided, the server will avoid returning large output and will instead write to this file (and return a short summary)."
                     }
                 },
                 "required": ["file_path"]
@@ -244,16 +268,59 @@ async def list_tools() -> list[Tool]:
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls"""
+
+    MAX_RETURN_CHARS = 8_000
+
+    def _ensure_parent(path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _summarize_existing_file(path: Path) -> str:
+        if not path.exists():
+            return f"Output file not found: {path}"
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = -1
+        return f"Output saved: {path} (bytes={size})"
+
+    def _write_output_if_missing(output_path: str, content: str) -> str:
+        path = Path(output_path)
+        _ensure_parent(path)
+        if not path.exists():
+            path.write_text(content, encoding="utf-8")
+        return _summarize_existing_file(path)
+
+    def _truncate(text: str) -> str:
+        if len(text) <= MAX_RETURN_CHARS:
+            return text
+        return text[:MAX_RETURN_CHARS] + "\n\n[TRUNCATED]"
+
+    class _EnvOverride:
+        def __init__(self, updates: dict[str, str]) -> None:
+            self._updates = updates
+            self._previous: dict[str, str | None] = {}
+
+        def __enter__(self) -> None:
+            for k, v in self._updates.items():
+                self._previous[k] = os.environ.get(k)
+                os.environ[k] = v
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+            for k, prev in self._previous.items():
+                if prev is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = prev
     
     def _format_result(result: Any, action: str = "Execution") -> list[TextContent]:
         """Format ExecutionResult to TextContent."""
         output_parts = []
         if result.output:
-            output_parts.append(f"Output:\n{result.output}")
+            output_parts.append(f"Output:\n{_truncate(result.output)}")
         if result.error:
-            output_parts.append(f"Error:\n{result.error}")
+            output_parts.append(f"Error:\n{_truncate(result.error)}")
         if result.traceback and not result.success:
-            output_parts.append(f"Traceback:\n{result.traceback}")
+            output_parts.append(f"Traceback:\n{_truncate(result.traceback)}")
         if not output_parts:
             output_parts.append(f"{action} completed successfully (no output)")
         
@@ -267,14 +334,60 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         code = arguments.get("code", "")
         cwd = arguments.get("cwd")
         timeout = arguments.get("timeout")
-        result = run_code(code, cwd=cwd, timeout=timeout)
+        input_path = arguments.get("input_path")
+        output_path = arguments.get("output_path")
+
+        env_updates: dict[str, str] = {}
+        if input_path:
+            env_updates["PYX_INPUT_PATH"] = str(input_path)
+        if output_path:
+            env_updates["PYX_OUTPUT_PATH"] = str(output_path)
+
+        with _EnvOverride(env_updates):
+            result = run_code(code, cwd=cwd, timeout=timeout)
+
+        if output_path:
+            combined = ""
+            if result.output:
+                combined += result.output
+            if result.error:
+                combined += ("\n" if combined else "") + f"[stderr]\n{result.error}"
+            if result.traceback and not result.success:
+                combined += ("\n" if combined else "") + f"[traceback]\n{result.traceback}"
+            summary = _write_output_if_missing(str(output_path), combined)
+            status = "✓" if result.success else "✗"
+            return [TextContent(type="text", text=f"{status} Execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
+
         return _format_result(result)
     
     elif name == "run_async_python_code":
         code = arguments.get("code", "")
         cwd = arguments.get("cwd")
         timeout = arguments.get("timeout")
-        result = run_async_code(code, cwd=cwd, timeout=timeout)
+        input_path = arguments.get("input_path")
+        output_path = arguments.get("output_path")
+
+        env_updates: dict[str, str] = {}
+        if input_path:
+            env_updates["PYX_INPUT_PATH"] = str(input_path)
+        if output_path:
+            env_updates["PYX_OUTPUT_PATH"] = str(output_path)
+
+        with _EnvOverride(env_updates):
+            result = run_async_code(code, cwd=cwd, timeout=timeout)
+
+        if output_path:
+            combined = ""
+            if result.output:
+                combined += result.output
+            if result.error:
+                combined += ("\n" if combined else "") + f"[stderr]\n{result.error}"
+            if result.traceback and not result.success:
+                combined += ("\n" if combined else "") + f"[traceback]\n{result.traceback}"
+            summary = _write_output_if_missing(str(output_path), combined)
+            status = "✓" if result.success else "✗"
+            return [TextContent(type="text", text=f"{status} Async execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
+
         return _format_result(result, "Async execution")
     
     elif name == "run_python_file":
@@ -282,7 +395,30 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         cwd = arguments.get("cwd")
         script_args = arguments.get("script_args", [])
         timeout = arguments.get("timeout")
-        result = run_file(file_path, script_args=script_args, cwd=cwd, timeout=timeout)
+        input_path = arguments.get("input_path")
+        output_path = arguments.get("output_path")
+
+        env_updates: dict[str, str] = {}
+        if input_path:
+            env_updates["PYX_INPUT_PATH"] = str(input_path)
+        if output_path:
+            env_updates["PYX_OUTPUT_PATH"] = str(output_path)
+
+        with _EnvOverride(env_updates):
+            result = run_file(file_path, script_args=script_args, cwd=cwd, timeout=timeout)
+
+        if output_path:
+            combined = ""
+            if result.output:
+                combined += result.output
+            if result.error:
+                combined += ("\n" if combined else "") + f"[stderr]\n{result.error}"
+            if result.traceback and not result.success:
+                combined += ("\n" if combined else "") + f"[traceback]\n{result.traceback}"
+            summary = _write_output_if_missing(str(output_path), combined)
+            status = "✓" if result.success else "✗"
+            return [TextContent(type="text", text=f"{status} Script execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
+
         return _format_result(result, "Script execution")
     
     elif name == "install_package":

@@ -131,12 +131,60 @@ def _execute_with_subprocess(
         )
 
 
+def _ensure_parent_dir(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _write_subprocess_output_to_file(
+    cmd: list[str],
+    cwd: str | None,
+    timeout: float | None,
+    output_path: str | Path,
+) -> ExecutionResult:
+    """Run a subprocess and stream combined stdout/stderr to a file.
+
+    This avoids buffering large outputs in memory.
+    """
+    path = Path(output_path)
+    _ensure_parent_dir(path)
+    try:
+        with path.open("wb") as out:
+            result = subprocess.run(
+                cmd,
+                stdout=out,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                cwd=cwd,
+            )
+        return ExecutionResult(
+            success=result.returncode == 0,
+            output="",
+            error=None if result.returncode == 0 else f"Process exited with code {result.returncode}. Output written to: {path.resolve()}",
+            traceback=None,
+        )
+    except subprocess.TimeoutExpired:
+        return ExecutionResult(
+            success=False,
+            output="",
+            error=f"Execution timed out after {timeout} seconds. Partial output written to: {path.resolve()}",
+            traceback=None,
+        )
+    except Exception as e:
+        return ExecutionResult(
+            success=False,
+            output="",
+            error=str(e),
+            traceback=tb_module.format_exc(),
+        )
+
+
 def run_code(
     code: str,
     capture_output: bool = True,
     cwd: str | None = None,
     timeout: float | None = DEFAULT_TIMEOUT,
     validate_syntax: bool = True,
+    output_path: str | None = None,
 ) -> ExecutionResult:
     """
     Execute inline Python code.
@@ -156,6 +204,10 @@ def run_code(
     if validate_syntax:
         is_valid, syntax_error = _validate_syntax(code)
         if not is_valid:
+            if output_path is not None:
+                out_path = Path(output_path)
+                _ensure_parent_dir(out_path)
+                out_path.write_text(syntax_error or "Syntax error", encoding="utf-8")
             return ExecutionResult(
                 success=False,
                 output="",
@@ -163,6 +215,16 @@ def run_code(
                 traceback=None
             )
     
+    # When output_path is specified, stream all output to that file.
+    # This prevents output explosions from consuming memory/LLM context.
+    if output_path is not None:
+        return _write_subprocess_output_to_file(
+            [sys.executable, "-c", code],
+            cwd=cwd,
+            timeout=timeout,
+            output_path=output_path,
+        )
+
     # When timeout is specified, use subprocess for reliable timeout
     # (subprocess can be killed, threads cannot)
     if timeout is not None:
@@ -238,6 +300,7 @@ def run_file(
     cwd: str | None = None,
     timeout: float | None = DEFAULT_TIMEOUT,
     validate_syntax: bool = True,
+    output_path: str | None = None,
 ) -> ExecutionResult:
     """
     Execute a Python script file.
@@ -275,6 +338,10 @@ def run_file(
     path = Path(file_path)
     
     if not path.exists():
+        if output_path is not None:
+            out_path = Path(output_path)
+            _ensure_parent_dir(out_path)
+            out_path.write_text(f"File not found: {file_path}", encoding="utf-8")
         return ExecutionResult(
             success=False,
             output="",
@@ -282,6 +349,10 @@ def run_file(
         )
     
     if not path.is_file():
+        if output_path is not None:
+            out_path = Path(output_path)
+            _ensure_parent_dir(out_path)
+            out_path.write_text(f"Not a file: {file_path}", encoding="utf-8")
         return ExecutionResult(
             success=False,
             output="",
@@ -298,6 +369,10 @@ def run_file(
             continue
     
     if code is None:
+        if output_path is not None:
+            out_path = Path(output_path)
+            _ensure_parent_dir(out_path)
+            out_path.write_text("Unable to decode file with supported encodings", encoding="utf-8")
         return ExecutionResult(
             success=False,
             output="",
@@ -308,12 +383,27 @@ def run_file(
     if validate_syntax:
         is_valid, syntax_error = _validate_syntax(code)
         if not is_valid:
+            if output_path is not None:
+                out_path = Path(output_path)
+                _ensure_parent_dir(out_path)
+                out_path.write_text(f"Syntax error in {file_path}:\n{syntax_error}", encoding="utf-8")
             return ExecutionResult(
                 success=False,
                 output="",
                 error=f"Syntax error in {file_path}:\n{syntax_error}",
                 traceback=None
             )
+
+    # When output_path is specified, stream all output to that file.
+    if output_path is not None:
+        cmd = [sys.executable, str(path.resolve())] + (script_args or [])
+        target_cwd = str(Path(cwd).resolve()) if cwd else str(path.parent.resolve())
+        return _write_subprocess_output_to_file(
+            cmd,
+            cwd=target_cwd,
+            timeout=timeout,
+            output_path=output_path,
+        )
 
     # When timeout is specified, use subprocess for reliable timeout
     if timeout is not None:
@@ -409,6 +499,7 @@ def run_async_code(
     cwd: str | None = None,
     timeout: float | None = DEFAULT_TIMEOUT,
     validate_syntax: bool = True,
+    output_path: str | None = None,
 ) -> ExecutionResult:
     """
     Execute async Python code containing async/await.
@@ -466,8 +557,19 @@ def run_async_code(
     # Load global .env (python-executor dir) + local .env (cwd)
     _load_all_env()
     
-    stdout_capture = io.StringIO()
-    stderr_capture = io.StringIO()
+    stdout_capture: io.TextIOBase
+    stderr_capture: io.TextIOBase
+
+    if output_path is not None:
+        out_path = Path(output_path)
+        _ensure_parent_dir(out_path)
+        out_bin = out_path.open("wb")
+        out_text = io.TextIOWrapper(out_bin, encoding="utf-8", errors="replace", newline="\n", write_through=True)
+        stdout_capture = out_text
+        stderr_capture = out_text
+    else:
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
     
     async def _async_exec() -> None:
         """Execute the async code in async context."""
@@ -497,25 +599,30 @@ def run_async_code(
                 asyncio.run(_async_exec())
         return ExecutionResult(
             success=True,
-            output=stdout_capture.getvalue(),
-            error=stderr_capture.getvalue() or None
+            output="" if output_path is not None else stdout_capture.getvalue(),
+            error=None if output_path is not None else (stderr_capture.getvalue() or None)
         )
     except asyncio.TimeoutError:
         return ExecutionResult(
             success=False,
-            output=stdout_capture.getvalue(),
-            error=f"Async execution timed out after {timeout} seconds",
+            output="" if output_path is not None else stdout_capture.getvalue(),
+            error=f"Async execution timed out after {timeout} seconds" + (f". Partial output written to: {Path(output_path).resolve()}" if output_path is not None else ""),
             traceback=None
         )
     except Exception as e:
         tb_str = tb_module.format_exc()
         return ExecutionResult(
             success=False,
-            output=stdout_capture.getvalue(),
+            output="" if output_path is not None else stdout_capture.getvalue(),
             error=str(e),
             traceback=tb_str
         )
     finally:
+        if output_path is not None:
+            try:
+                stdout_capture.close()
+            except Exception:
+                pass
         if cwd:
             os.chdir(original_cwd)
 
