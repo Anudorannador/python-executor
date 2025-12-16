@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 import sys
 from datetime import datetime
@@ -393,13 +394,13 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     run_parser.add_argument(
         "--output-path",
         type=str,
-        help="Optional output file path. If not provided, pyx writes to .temp/<task>.<timestamp>.output.txt.",
+        help="Optional manifest path (Strategy A). If not provided, pyx writes <base>.<run_id>.manifest.json into the resolved output directory.",
     )
     run_parser.add_argument(
         "--output-dir",
         type=str,
-        default=".temp",
-        help="Directory used for auto-generated outputs (default: .temp)",
+        default=None,
+        help="Directory used for auto-generated outputs (default: .temp). If --input-path is provided, its directory is used by default.",
     )
     run_group = run_parser.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
@@ -472,24 +473,73 @@ def main() -> NoReturn | None:
     args = parser.parse_args()
 
     if args.command == "run":
-        def _resolve_output_path() -> Path:
-            if getattr(args, "output_path", None):
-                return Path(args.output_path)
-
-            out_dir = Path(getattr(args, "output_dir", ".temp") or ".temp")
-            out_dir.mkdir(parents=True, exist_ok=True)
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-
+        def _resolve_base_name() -> str:
             if getattr(args, "file", None):
-                base = Path(args.file).stem
-            elif getattr(args, "code", None):
-                base = "inline"
-            elif getattr(args, "base64", None):
-                base = "base64"
-            else:
-                base = "run"
+                return Path(args.file).stem
+            if getattr(args, "code", None):
+                return "inline"
+            if getattr(args, "base64", None):
+                return "base64"
+            return "run"
 
-            return out_dir / f"{base}.{ts}.output.txt"
+        def _resolve_output_dir() -> Path:
+            configured = getattr(args, "output_dir", None)
+            if configured:
+                return Path(configured)
+
+            input_path = getattr(args, "input_path", None)
+            if input_path:
+                return Path(input_path).resolve().parent
+
+            file_path = getattr(args, "file", None)
+            if file_path:
+                return Path(file_path).resolve().parent
+
+            return Path(".temp")
+
+        def _resolve_manifest_path(output_dir: Path, base: str, run_id: str) -> Path:
+            configured = getattr(args, "output_path", None)
+            if configured:
+                return Path(configured)
+            return output_dir / f"{base}.{run_id}.manifest.json"
+
+        def _resolve_log_path(output_dir: Path, base: str, run_id: str) -> Path:
+            return output_dir / f"{base}.{run_id}.log.txt"
+
+        def _ensure_minimal_manifest(manifest_path: Path, *, run_id: str, base: str, log_path: Path, success: bool) -> None:
+            if manifest_path.exists():
+                return
+
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            input_path = getattr(args, "input_path", None)
+
+            payload: dict[str, object] = {
+                "run_id": run_id,
+                "success": success,
+                "output_dir": str(manifest_path.parent.resolve()),
+                "input_path": str(Path(input_path).resolve()) if input_path else None,
+                "outputs": [
+                    {
+                        "path": str(Path(log_path).resolve()),
+                        "role": "log",
+                        "category": "stdout_stderr",
+                        "format": "text",
+                    }
+                ],
+            }
+            manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        def _print_manifest_and_log_summary(manifest_path: Path, log_path: Path) -> None:
+            try:
+                manifest_size = manifest_path.stat().st_size
+            except OSError:
+                manifest_size = -1
+            try:
+                log_size = log_path.stat().st_size
+            except OSError:
+                log_size = -1
+            print(f"Manifest saved: {manifest_path} (bytes={manifest_size})")
+            print(f"Log saved: {log_path} (bytes={log_size})")
 
         # Handle --cwd option
         if args.cwd:
@@ -500,8 +550,19 @@ def main() -> NoReturn | None:
             # Reload local .env from the new cwd (overrides user config)
             load_dotenv(override=True)
 
-        output_path = _resolve_output_path().resolve()
-        os.environ["PYX_OUTPUT_PATH"] = str(output_path)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base = _resolve_base_name()
+        output_dir = _resolve_output_dir().resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        manifest_path = _resolve_manifest_path(output_dir, base=base, run_id=run_id).resolve()
+        log_path = _resolve_log_path(output_dir, base=base, run_id=run_id).resolve()
+
+        os.environ["PYX_RUN_ID"] = run_id
+        os.environ["PYX_OUTPUT_DIR"] = str(output_dir)
+        # Strategy A: PYX_OUTPUT_PATH is the manifest path.
+        os.environ["PYX_OUTPUT_PATH"] = str(manifest_path)
+        os.environ["PYX_LOG_PATH"] = str(log_path)
         if getattr(args, "input_path", None):
             os.environ["PYX_INPUT_PATH"] = str(Path(args.input_path).resolve())
         
@@ -510,27 +571,21 @@ def main() -> NoReturn | None:
         
         if args.code:
             if is_async:
-                result = run_async_code(args.code, timeout=timeout, output_path=str(output_path))
+                result = run_async_code(args.code, timeout=timeout, output_path=str(log_path))
             else:
-                result = run_code(args.code, capture_output=False, timeout=timeout, output_path=str(output_path))
+                result = run_code(args.code, capture_output=False, timeout=timeout, output_path=str(log_path))
 
-            try:
-                size = output_path.stat().st_size
-            except OSError:
-                size = -1
-            print(f"Output saved: {output_path} (bytes={size})")
+            _ensure_minimal_manifest(manifest_path, run_id=run_id, base=base, log_path=log_path, success=result.success)
+            _print_manifest_and_log_summary(manifest_path, log_path)
             if result.error and not result.success:
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)
         elif args.file:
             script_args = args.script_args if hasattr(args, 'script_args') else []
-            result = run_file(args.file, script_args=script_args, capture_output=False, timeout=timeout, output_path=str(output_path))
+            result = run_file(args.file, script_args=script_args, capture_output=False, timeout=timeout, output_path=str(log_path))
 
-            try:
-                size = output_path.stat().st_size
-            except OSError:
-                size = -1
-            print(f"Output saved: {output_path} (bytes={size})")
+            _ensure_minimal_manifest(manifest_path, run_id=run_id, base=base, log_path=log_path, success=result.success)
+            _print_manifest_and_log_summary(manifest_path, log_path)
             if result.error and not result.success:
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)
@@ -555,15 +610,12 @@ def main() -> NoReturn | None:
                 sys.exit(0)
             
             if is_async:
-                result = run_async_code(code, timeout=timeout, output_path=str(output_path))
+                result = run_async_code(code, timeout=timeout, output_path=str(log_path))
             else:
-                result = run_code(code, capture_output=False, timeout=timeout, output_path=str(output_path))
+                result = run_code(code, capture_output=False, timeout=timeout, output_path=str(log_path))
 
-            try:
-                size = output_path.stat().st_size
-            except OSError:
-                size = -1
-            print(f"Output saved: {output_path} (bytes={size})")
+            _ensure_minimal_manifest(manifest_path, run_id=run_id, base=base, log_path=log_path, success=result.success)
+            _print_manifest_and_log_summary(manifest_path, log_path)
             if result.error and not result.success:
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)

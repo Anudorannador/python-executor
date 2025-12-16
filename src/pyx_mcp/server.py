@@ -6,9 +6,11 @@ Provides tools for LLMs to execute Python code safely.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -74,9 +76,13 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Optional path to a JSON input file. The server will expose it via env var PYX_INPUT_PATH for your code to read."
                     },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Optional output directory for generated files. Defaults to the directory of input_path if provided, else cwd."
+                    },
                     "output_path": {
                         "type": "string",
-                        "description": "Optional path to write output text. When provided, the server will avoid returning large output and will instead write to this file (and return a short summary)."
+                        "description": "Optional manifest path (Strategy A). When provided (or when output_dir is provided), the server will stream stdout/stderr to a log file and ensure a JSON manifest exists at this path, instead of returning large output."
                     }
                 },
                 "required": ["code"]
@@ -104,9 +110,13 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Optional path to a JSON input file. The server will expose it via env var PYX_INPUT_PATH for your code to read."
                     },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Optional output directory for generated files. Defaults to the directory of input_path if provided, else cwd."
+                    },
                     "output_path": {
                         "type": "string",
-                        "description": "Optional path to write output text. When provided, the server will avoid returning large output and will instead write to this file (and return a short summary)."
+                        "description": "Optional manifest path (Strategy A). When provided (or when output_dir is provided), the server will stream stdout/stderr to a log file and ensure a JSON manifest exists at this path, instead of returning large output."
                     }
                 },
                 "required": ["code"]
@@ -139,9 +149,13 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Optional path to a JSON input file. The server will expose it via env var PYX_INPUT_PATH for your script to read."
                     },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Optional output directory for generated files. Defaults to the directory of input_path if provided, else cwd."
+                    },
                     "output_path": {
                         "type": "string",
-                        "description": "Optional path to write output text. When provided, the server will avoid returning large output and will instead write to this file (and return a short summary)."
+                        "description": "Optional manifest path (Strategy A). When provided (or when output_dir is provided), the server will stream stdout/stderr to a log file and ensure a JSON manifest exists at this path, instead of returning large output."
                     }
                 },
                 "required": ["file_path"]
@@ -208,7 +222,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="generate_pyx_instructions",
-            description="Generate pyx-usage instructions markdown that teaches LLMs to use pyx instead of raw shell commands. Returns structured data with markdown content, env variable analysis with guessed usage, and raw environment info. Optionally saves to file.",
+            description="(Legacy) Generate pyx-usage instructions markdown that teaches LLMs to use pyx instead of raw shell commands. Prefer the combined CLI command `pyx gi` for a single consolidated doc.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -220,7 +234,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "output_path": {
                         "type": "string",
-                        "description": "File path to save the generated markdown. Default: ./docs/pyx.pyx.instructions.md",
+                        "description": "File path to save the generated markdown (legacy).",
                         "default": "./docs/pyx.pyx.instructions.md"
                     },
                     "save_to_file": {
@@ -239,13 +253,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="generate_shell_instructions",
-            description="Generate shell-usage instructions markdown that teaches LLMs how to use the current shell correctly. Includes shell-specific syntax, supported patterns, available commands, and best practices. Optionally saves to file.",
+            description="(Legacy) Generate shell-usage instructions markdown that teaches LLMs how to use the current shell correctly. Prefer the combined CLI command `pyx gi` for a single consolidated doc.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "output_path": {
                         "type": "string",
-                        "description": "File path to save the generated markdown. Default: ./docs/pyx.shell.instructions.md",
+                        "description": "File path to save the generated markdown (legacy).",
                         "default": "./docs/pyx.shell.instructions.md"
                     },
                     "save_to_file": {
@@ -274,21 +288,59 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     def _ensure_parent(path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
 
-    def _summarize_existing_file(path: Path) -> str:
+    def _resolve_output_dir(*, cwd: str | None, input_path: str | None, output_dir: str | None) -> Path:
+        if output_dir:
+            return Path(output_dir)
+        if input_path:
+            return Path(input_path).resolve().parent
+        if cwd:
+            return Path(cwd).resolve()
+        return Path.cwd()
+
+    def _resolve_manifest_path(output_dir: Path, *, output_path: str | None, base: str, run_id: str) -> Path:
+        if output_path:
+            return Path(output_path)
+        return output_dir / f"{base}.{run_id}.manifest.json"
+
+    def _resolve_log_path(output_dir: Path, *, base: str, run_id: str) -> Path:
+        return output_dir / f"{base}.{run_id}.log.txt"
+
+    def _ensure_minimal_manifest(
+        manifest_path: Path,
+        *,
+        run_id: str,
+        success: bool,
+        output_dir: Path,
+        input_path: str | None,
+        log_path: Path,
+    ) -> None:
+        if manifest_path.exists():
+            return
+        _ensure_parent(manifest_path)
+        payload: dict[str, object] = {
+            "run_id": run_id,
+            "success": success,
+            "output_dir": str(output_dir.resolve()),
+            "input_path": str(Path(input_path).resolve()) if input_path else None,
+            "outputs": [
+                {
+                    "path": str(log_path.resolve()),
+                    "role": "log",
+                    "category": "stdout_stderr",
+                    "format": "text",
+                }
+            ],
+        }
+        manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _summarize_existing_file(path: Path, label: str = "File") -> str:
         if not path.exists():
-            return f"Output file not found: {path}"
+            return f"{label} not found: {path}"
         try:
             size = path.stat().st_size
         except OSError:
             size = -1
-        return f"Output saved: {path} (bytes={size})"
-
-    def _write_output_if_missing(output_path: str, content: str) -> str:
-        path = Path(output_path)
-        _ensure_parent(path)
-        if not path.exists():
-            path.write_text(content, encoding="utf-8")
-        return _summarize_existing_file(path)
+        return f"{label} saved: {path} (bytes={size})"
 
     def _truncate(text: str) -> str:
         if len(text) <= MAX_RETURN_CHARS:
@@ -335,28 +387,53 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         cwd = arguments.get("cwd")
         timeout = arguments.get("timeout")
         input_path = arguments.get("input_path")
+        output_dir_arg = arguments.get("output_dir")
         output_path = arguments.get("output_path")
+
+        file_mode = bool(output_path or output_dir_arg)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base = "inline"
+
+        if file_mode:
+            output_dir = _resolve_output_dir(cwd=cwd, input_path=input_path, output_dir=output_dir_arg).resolve()
+            output_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = _resolve_manifest_path(output_dir, output_path=output_path, base=base, run_id=run_id).resolve()
+            log_path = _resolve_log_path(output_dir, base=base, run_id=run_id).resolve()
+
+            env_updates: dict[str, str] = {
+                "PYX_RUN_ID": run_id,
+                "PYX_OUTPUT_DIR": str(output_dir),
+                "PYX_OUTPUT_PATH": str(manifest_path),
+                "PYX_LOG_PATH": str(log_path),
+            }
+            if input_path:
+                env_updates["PYX_INPUT_PATH"] = str(input_path)
+
+            with _EnvOverride(env_updates):
+                result = run_code(code, cwd=cwd, timeout=timeout, output_path=str(log_path))
+
+            _ensure_minimal_manifest(
+                manifest_path,
+                run_id=run_id,
+                success=result.success,
+                output_dir=output_dir,
+                input_path=input_path,
+                log_path=log_path,
+            )
+
+            status = "✓" if result.success else "✗"
+            summary = "\n".join([
+                _summarize_existing_file(manifest_path, label="Manifest"),
+                _summarize_existing_file(log_path, label="Log"),
+            ])
+            return [TextContent(type="text", text=f"{status} Execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
 
         env_updates: dict[str, str] = {}
         if input_path:
             env_updates["PYX_INPUT_PATH"] = str(input_path)
-        if output_path:
-            env_updates["PYX_OUTPUT_PATH"] = str(output_path)
 
         with _EnvOverride(env_updates):
             result = run_code(code, cwd=cwd, timeout=timeout)
-
-        if output_path:
-            combined = ""
-            if result.output:
-                combined += result.output
-            if result.error:
-                combined += ("\n" if combined else "") + f"[stderr]\n{result.error}"
-            if result.traceback and not result.success:
-                combined += ("\n" if combined else "") + f"[traceback]\n{result.traceback}"
-            summary = _write_output_if_missing(str(output_path), combined)
-            status = "✓" if result.success else "✗"
-            return [TextContent(type="text", text=f"{status} Execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
 
         return _format_result(result)
     
@@ -365,28 +442,53 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         cwd = arguments.get("cwd")
         timeout = arguments.get("timeout")
         input_path = arguments.get("input_path")
+        output_dir_arg = arguments.get("output_dir")
         output_path = arguments.get("output_path")
+
+        file_mode = bool(output_path or output_dir_arg)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base = "inline"
+
+        if file_mode:
+            output_dir = _resolve_output_dir(cwd=cwd, input_path=input_path, output_dir=output_dir_arg).resolve()
+            output_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = _resolve_manifest_path(output_dir, output_path=output_path, base=base, run_id=run_id).resolve()
+            log_path = _resolve_log_path(output_dir, base=base, run_id=run_id).resolve()
+
+            env_updates: dict[str, str] = {
+                "PYX_RUN_ID": run_id,
+                "PYX_OUTPUT_DIR": str(output_dir),
+                "PYX_OUTPUT_PATH": str(manifest_path),
+                "PYX_LOG_PATH": str(log_path),
+            }
+            if input_path:
+                env_updates["PYX_INPUT_PATH"] = str(input_path)
+
+            with _EnvOverride(env_updates):
+                result = run_async_code(code, cwd=cwd, timeout=timeout, output_path=str(log_path))
+
+            _ensure_minimal_manifest(
+                manifest_path,
+                run_id=run_id,
+                success=result.success,
+                output_dir=output_dir,
+                input_path=input_path,
+                log_path=log_path,
+            )
+
+            status = "✓" if result.success else "✗"
+            summary = "\n".join([
+                _summarize_existing_file(manifest_path, label="Manifest"),
+                _summarize_existing_file(log_path, label="Log"),
+            ])
+            return [TextContent(type="text", text=f"{status} Async execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
 
         env_updates: dict[str, str] = {}
         if input_path:
             env_updates["PYX_INPUT_PATH"] = str(input_path)
-        if output_path:
-            env_updates["PYX_OUTPUT_PATH"] = str(output_path)
 
         with _EnvOverride(env_updates):
             result = run_async_code(code, cwd=cwd, timeout=timeout)
-
-        if output_path:
-            combined = ""
-            if result.output:
-                combined += result.output
-            if result.error:
-                combined += ("\n" if combined else "") + f"[stderr]\n{result.error}"
-            if result.traceback and not result.success:
-                combined += ("\n" if combined else "") + f"[traceback]\n{result.traceback}"
-            summary = _write_output_if_missing(str(output_path), combined)
-            status = "✓" if result.success else "✗"
-            return [TextContent(type="text", text=f"{status} Async execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
 
         return _format_result(result, "Async execution")
     
@@ -396,28 +498,53 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         script_args = arguments.get("script_args", [])
         timeout = arguments.get("timeout")
         input_path = arguments.get("input_path")
+        output_dir_arg = arguments.get("output_dir")
         output_path = arguments.get("output_path")
+
+        file_mode = bool(output_path or output_dir_arg)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base = Path(file_path).stem if file_path else "script"
+
+        if file_mode:
+            output_dir = _resolve_output_dir(cwd=cwd, input_path=input_path, output_dir=output_dir_arg).resolve()
+            output_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = _resolve_manifest_path(output_dir, output_path=output_path, base=base, run_id=run_id).resolve()
+            log_path = _resolve_log_path(output_dir, base=base, run_id=run_id).resolve()
+
+            env_updates: dict[str, str] = {
+                "PYX_RUN_ID": run_id,
+                "PYX_OUTPUT_DIR": str(output_dir),
+                "PYX_OUTPUT_PATH": str(manifest_path),
+                "PYX_LOG_PATH": str(log_path),
+            }
+            if input_path:
+                env_updates["PYX_INPUT_PATH"] = str(input_path)
+
+            with _EnvOverride(env_updates):
+                result = run_file(file_path, script_args=script_args, cwd=cwd, timeout=timeout, output_path=str(log_path))
+
+            _ensure_minimal_manifest(
+                manifest_path,
+                run_id=run_id,
+                success=result.success,
+                output_dir=output_dir,
+                input_path=input_path,
+                log_path=log_path,
+            )
+
+            status = "✓" if result.success else "✗"
+            summary = "\n".join([
+                _summarize_existing_file(manifest_path, label="Manifest"),
+                _summarize_existing_file(log_path, label="Log"),
+            ])
+            return [TextContent(type="text", text=f"{status} Script execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
 
         env_updates: dict[str, str] = {}
         if input_path:
             env_updates["PYX_INPUT_PATH"] = str(input_path)
-        if output_path:
-            env_updates["PYX_OUTPUT_PATH"] = str(output_path)
 
         with _EnvOverride(env_updates):
             result = run_file(file_path, script_args=script_args, cwd=cwd, timeout=timeout)
-
-        if output_path:
-            combined = ""
-            if result.output:
-                combined += result.output
-            if result.error:
-                combined += ("\n" if combined else "") + f"[stderr]\n{result.error}"
-            if result.traceback and not result.success:
-                combined += ("\n" if combined else "") + f"[traceback]\n{result.traceback}"
-            summary = _write_output_if_missing(str(output_path), combined)
-            status = "✓" if result.success else "✗"
-            return [TextContent(type="text", text=f"{status} Script execution {'succeeded' if result.success else 'failed'}\n\n{summary}")]
 
         return _format_result(result, "Script execution")
     

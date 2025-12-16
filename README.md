@@ -45,7 +45,7 @@ pyx info
 pyx run --code "print('hello')"
 ```
 
-`pyx run` writes output to a file by default (see the printed `Output saved: ...` path under `.temp/`).
+`pyx run` writes a **manifest** and a **log** by default (see the printed `Manifest saved: ...` and `Log saved: ...` paths).
 
 After installation, `pyx` (or `python-executor`) is available globally from any directory.
 
@@ -72,7 +72,7 @@ After installation, `pyx` (or `python-executor`) is available globally from any 
 | `pyx run --file "path.py" -- args` | Run script with arguments |
 | `pyx run --cwd "dir" --code "..."` | Run code in specified directory |
 | `pyx run --input-path "in.json" --file "task.py"` | Provide JSON input via `PYX_INPUT_PATH` |
-| `pyx run --output-path "out.txt" --file "task.py"` | Force output file path (default: `.temp/<task>.<timestamp>.output.txt`) |
+| `pyx run --output-path "manifest.json" --file "task.py"` | Force manifest path (Strategy A). A log file is also produced under the resolved output directory. |
 | `pyx python` | Launch the pyx Python interpreter (REPL) |
 | `pyx add --package "name"` | Install a package to optional dependencies |
 | `pyx ensure-temp` | Ensure temp directory exists |
@@ -91,24 +91,25 @@ pyx run --file ".temp/pyx_task.py" -- --args
 > **Note**: `--base64` is supported but is legacy/interactive in this CLI (it shows decoded code and asks for confirmation).
 > `-y/--yes` is deprecated and is not allowed with `--base64`.
 
-### Preventing Output Explosions (Recommended: Input JSON + Output File)
+### Preventing Output Explosions (Recommended: Input JSON + Manifest + Files)
 
 LLM contexts are sensitive to huge outputs (1000-line files, tickers, large DB query results). To avoid token blow-ups and unusable logs, use this workflow:
 
 - **Always write a script** under `.temp/`.
 - **All inputs** go into a JSON file: `.temp/<task>.<variant>.input.json`.
-- **All outputs** go into a file: `.temp/<task>.<variant>.output.txt` (or `.json` when appropriate).
-- **Stdout is only a summary**: output path + size + small preview (head/tail) or keyword hits.
+- **Write one manifest** + any number of output files (e.g. `.txt`, `.json`, `.jsonl`).
+- **Stdout is only a summary**: manifest/log paths + sizes + tiny preview or keyword hits.
 
 Naming convention example:
 
 - `.temp/fetch_rates.py`
-- `.temp/fetch_rates.a.input.json` -> `.temp/fetch_rates.a.output.txt`
-- `.temp/fetch_rates.a2.input.json` -> `.temp/fetch_rates.a2.output.txt`
+- `.temp/fetch_rates.a.input.json` -> `fetch_rates.<run_id>.manifest.json` + `fetch_rates.<run_id>.log.txt` + dynamic outputs
 
 Before reading any output into the LLM, **check size/line-count first** and only load a slice (or search keywords) when the file is large.
 
-`pyx run` is designed to support this workflow: it always sets `PYX_OUTPUT_PATH`, and you can optionally pass `--input-path` / `--output-path` to standardize I/O.
+By default, when `--input-path` is provided, `PYX_OUTPUT_DIR` is set to the input JSON directory (so inputs + script + outputs can live together).
+
+`pyx run` is designed to support this workflow: it always sets `PYX_OUTPUT_PATH` (manifest), `PYX_OUTPUT_DIR`, `PYX_RUN_ID`, and `PYX_LOG_PATH`. You can optionally pass `--input-path` / `--output-path` to standardize I/O.
 
 If you want to hard-enforce this workflow in prompting, include the exact phrase `PYX_STRICT_JSON_IO` in your prompt; the generated instructions treat it as a strict-mode trigger.
 

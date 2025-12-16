@@ -51,39 +51,44 @@ Then you MUST follow these rules:
 
 1. Create a task script under `.temp/` (never inline code in the shell).
 2. All inputs MUST be read from a JSON file (path provided by the user or created under `.temp/`).
-3. All outputs MUST be written to an output file (prefer `.txt`).
-4. Stdout MUST be a short summary only: output path + file size + tiny preview.
+3. All outputs MUST be written to files (prefer `.txt` for human-readable summaries).
+4. Stdout MUST be a short summary only: manifest/log paths + sizes + tiny preview.
 5. Before reading any output content into the LLM context, you MUST check its size/line-count.
    - If it is small (e.g., a few hundred words/lines), it is OK to include all.
    - If it is large, only include a slice (head/tail) or keyword hits.
 
-## Output Explosion Control (Input JSON + Output File)
+## Output Explosion Control (Input JSON + Manifest + Files)
 
 When output can be large (file dumps, tickers, DB queries, logs), **never print the full result to stdout**.
 Instead, enforce this contract:
 
 - **Input**: always a JSON file on disk (not embedded in CLI args)
-- **Output**: always write to an output file (usually `.txt`; sometimes `.json`)
+- **Output**: write one **manifest** file + any number of output files (usually `.txt`; sometimes `.json`/`.jsonl`)
 - **Stdout**: only a short summary (paths + size + a tiny preview)
 
 **Recommended naming convention:**
 
 - Script: `.temp/<task>.py`
 - Input: `.temp/<task>.<variant>.input.json`
-- Output: `.temp/<task>.<variant>.output.txt`
+- Manifest: `.temp/<task>.<run_id>.manifest.json`
+- Log: `.temp/<task>.<run_id>.log.txt`
+- Outputs: `.temp/<task>.<variant>.<run_id>.<ext>` (dynamic; based on content/category)
 
-Example variants: `fetch_rates.a.input.json` -> `fetch_rates.a.output.txt`, `fetch_rates.a2.input.json` -> `fetch_rates.a2.output.txt`.
+Example variants: `fetch_rates.a.input.json` -> `fetch_rates.<run_id>.manifest.json` + `fetch_rates.<run_id>.log.txt` + dynamic outputs (tracked by the manifest).
 
 ### CLI Support (Recommended)
 
 `pyx run` supports `--input-path` and `--output-path` to standardize I/O.
-It exposes these paths to your code via environment variables:
+It exposes these paths to your code via environment variables (Strategy A):
 
 - `PYX_INPUT_PATH` (optional)
-- `PYX_OUTPUT_PATH` (always set by the CLI)
+- `PYX_OUTPUT_DIR` (always set; defaults to the input file directory when `--input-path` is provided)
+- `PYX_RUN_ID` (always set)
+- `PYX_LOG_PATH` (always set; stdout/stderr stream target)
+- `PYX_OUTPUT_PATH` (always set; **manifest path**)
 
-By default, if you do not pass `--output-path`, the CLI writes to `.temp/<task>.<timestamp>.output.txt`.
-The CLI prints only a short summary to stdout to avoid token blow-ups.
+By default, if you do not pass `--output-path`, the CLI writes a manifest to `<base>.<run_id>.manifest.json` inside the resolved output directory.
+The CLI prints only a short summary to stdout (manifest + log) to avoid token blow-ups.
 
 ### Always Check Output Size First
 
@@ -560,9 +565,9 @@ options:
   --input-path INPUT_PATH
                         Optional path to a JSON input file. Exposed to the script via env var PYX_INPUT_PATH.
   --output-path OUTPUT_PATH
-                        Optional output file path. If not provided, pyx writes to .temp/<task>.<timestamp>.output.txt.
+                        Optional manifest path (Strategy A). If not provided, pyx writes <base>.<run_id>.manifest.json into the resolved output directory.
   --output-dir OUTPUT_DIR
-                        Directory used for auto-generated outputs (default: .temp)
+                        Directory used for auto-generated outputs (default: .temp). If --input-path is provided, its directory is used by default.
   --code CODE, -c CODE  Inline Python code to execute
   --file FILE, -f FILE  Path to a Python script file. Use -- to pass args to script.
   --base64 BASE64, -b BASE64
