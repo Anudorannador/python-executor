@@ -50,7 +50,9 @@ from pyx_core import (  # noqa: E402
     format_environment_info,
     generate_pyx_instructions,
     generate_shell_instructions,
+    generate_skill_files,
     save_with_backup,
+    _generate_skill_md,
 )
 
 console = Console()
@@ -463,6 +465,23 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     gen_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
     gen_parser.add_argument("--print", dest="print_only", action="store_true", help="Print markdown to stdout instead of saving")
 
+    # generate-skill command (alias: gs)
+    skill_parser = subparsers.add_parser(
+        "generate-skill",
+        aliases=["gs"],
+        help="Generate Claude skill files (SKILL.md + references/) for pyx",
+    )
+    default_skill_output = os.environ.get("PYX_SKILL_PATH", "./docs/pyx")
+    skill_parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=str,
+        default=default_skill_output,
+        help=f"Output directory (default: $PYX_SKILL_PATH or {default_skill_output})",
+    )
+    skill_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
+    skill_parser.add_argument("--print", dest="print_only", action="store_true", help="Print SKILL.md to stdout instead of saving")
+
     return parser, gen_parser
 
 
@@ -742,6 +761,52 @@ def main() -> NoReturn | None:
                 console.print(f"  • Available commands: {cmds}/{total_cmds}")
         else:
             console.print("[red]Error saving file[/red]")
+            sys.exit(1)
+        
+        sys.exit(0)
+    elif args.command in ("generate-skill", "gs"):
+        output_dir = Path(args.output_dir)
+        
+        # Print only mode - just generate SKILL.md content
+        if args.print_only:
+            console.print("[bold blue]Collecting environment information...[/bold blue]", file=sys.stderr)
+            info = get_environment_info(show_progress=True)
+            skill_md = _generate_skill_md(info)
+            
+            reconfigure = getattr(sys.stdout, "reconfigure", None)
+            if callable(reconfigure):
+                reconfigure(encoding="utf-8")
+            print(skill_md)
+            sys.exit(0)
+        
+        # Generate skill files
+        console.print("[bold blue]Generating Claude skill files...[/bold blue]")
+        try:
+            result = generate_skill_files(
+                output_dir=output_dir,
+                show_progress=True,
+                force=args.force,
+            )
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            sys.exit(1)
+        
+        if result.success:
+            console.print(f"\n[green]✓ Generated skill at:[/green] {result.skill_dir}")
+            if result.backup_dir:
+                console.print(f"[dim]  Backup created: {result.backup_dir}[/dim]")
+            console.print("\n[bold]Files created:[/bold]")
+            for f in result.files_created:
+                try:
+                    rel_path = Path(f).relative_to(Path(result.skill_dir)) if result.skill_dir else f
+                    console.print(f"  • {rel_path}")
+                except ValueError:
+                    console.print(f"  • {f}")
+            
+            console.print("\n[dim]To use this skill, copy the directory to your Claude skills folder:[/dim]")
+            console.print(f"[dim]  ~/.claude/skills/pyx/  (or $CLAUDE_SKILLS_PATH)[/dim]")
+        else:
+            console.print(f"[red]Error: {result.error}[/red]")
             sys.exit(1)
         
         sys.exit(0)

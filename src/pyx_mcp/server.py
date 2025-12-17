@@ -222,7 +222,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="generate_pyx_instructions",
-            description="(Legacy) Generate pyx-usage instructions markdown that teaches LLMs to use pyx instead of raw shell commands. Prefer the combined CLI command `pyx gi` for a single consolidated doc.",
+            description="(Deprecated) Use CLI instead: `pyx gi` for instructions, `pyx gs` for Claude skills. This tool generates pyx-usage markdown but is superseded by the CLI commands.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -253,7 +253,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="generate_shell_instructions",
-            description="(Legacy) Generate shell-usage instructions markdown that teaches LLMs how to use the current shell correctly. Prefer the combined CLI command `pyx gi` for a single consolidated doc.",
+            description="(Deprecated) Use CLI instead: `pyx gi` for instructions, `pyx gs` for Claude skills. This tool generates shell-usage markdown but is superseded by the CLI commands.",
             inputSchema={
                 "type": "object",
                 "properties": {

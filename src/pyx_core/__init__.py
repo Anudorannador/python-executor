@@ -42,10 +42,13 @@ from .generator import (
     GenerateInstructionsResult,
     GeneratePyxInstructionsResult,
     GenerateShellInstructionsResult,
+    GenerateSkillResult,
     generate_instructions,
     generate_pyx_instructions,
     generate_shell_instructions,
+    generate_skill_files,
     save_with_backup,
+    _generate_skill_md,
 )
 
 __all__ = [
@@ -67,10 +70,13 @@ __all__ = [
     "GenerateInstructionsResult",
     "GeneratePyxInstructionsResult",
     "GenerateShellInstructionsResult",
+    "GenerateSkillResult",
     "generate_instructions",
     "generate_pyx_instructions",
     "generate_shell_instructions",
+    "generate_skill_files",
     "save_with_backup",
+    "_generate_skill_md",
     # Constants
     "DEFAULT_TIMEOUT",
     "COMMON_COMMANDS",

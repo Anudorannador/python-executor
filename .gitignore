@@ -19,3 +19,4 @@ temp/
 uv.lock
 
 docs/pyx.*.instructions.md.bak*
+docs/pyx.bak*
