@@ -59,6 +59,7 @@ pyx run --file "temp/task.py" --input-path "temp/task.input.json"
 ## Non-Strict Mode (Opt-out)
 
 Use only when user explicitly says:
+
 - "no strict mode"
 - "simple mode"
 
@@ -97,5 +98,6 @@ pyx run --file "temp/list_files.py"
 For detailed documentation, read these files when needed:
 
 - [MANIFEST_IO Details](references/manifest-io.md) - Complete I/O contract, multi-environment examples
+- [Learn Skill](references/learn-skill.md) - Extract reusable skills from tasks (trigger: "pyx learn skill")
 - [CLI Commands](references/commands.md) - Full CLI help output
 - [Environment Info](references/environment.md) - Paths, packages, shell info
