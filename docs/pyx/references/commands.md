@@ -39,7 +39,7 @@ options:
   --async               Execute as async code (supports await)
   --input-path          Path to JSON input file (exposed as PYX_INPUT_PATH)
   --output-path         Manifest path (exposed as PYX_OUTPUT_PATH)
-  --output-dir          Directory for outputs (default: .temp)
+  --output-dir          Directory for outputs (default: temp)
   --code, -c            Inline Python code (NOT recommended)
   --file, -f            Path to Python script (RECOMMENDED)
   --base64, -b          Base64-encoded code (legacy)

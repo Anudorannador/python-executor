@@ -86,9 +86,9 @@ If your payload contains regex, quotes, backslashes, JSON, `&`, or any other spe
 Instead, write a `.py` file and run it with `--file`:
 
 ```bash
-pyx ensure-temp --dir ".temp"
-# Write code to .temp/pyx_task.py
-pyx run --file ".temp/pyx_task.py" -- --args
+pyx ensure-temp --dir "temp"
+# Write code to temp/pyx_task.py
+pyx run --file "temp/pyx_task.py" -- --args
 ```
 
 > **Note**: `--base64` is supported but is legacy/interactive in this CLI (it shows decoded code and asks for confirmation).
@@ -98,15 +98,15 @@ pyx run --file ".temp/pyx_task.py" -- --args
 
 LLM contexts are sensitive to huge outputs (1000-line files, tickers, large DB query results). To avoid token blow-ups and unusable logs, use this workflow:
 
-- **Always write a script** under `.temp/`.
-- **All inputs** go into a JSON file: `.temp/<task>.<variant>.input.json`.
+- **Always write a script** under `temp/`.
+- **All inputs** go into a JSON file: `temp/<task>.<variant>.input.json`.
 - **Write one manifest** + any number of output files (e.g. `.txt`, `.json`, `.jsonl`).
 - **Stdout is only a summary**: manifest/log paths + sizes + tiny preview or keyword hits.
 
 Naming convention example:
 
-- `.temp/fetch_rates.py`
-- `.temp/fetch_rates.a.input.json` -> `fetch_rates.<run_id>.manifest.json` + `fetch_rates.<run_id>.log.txt` + dynamic outputs
+- `temp/fetch_rates.py`
+- `temp/fetch_rates.a.input.json` -> `fetch_rates.<run_id>.manifest.json` + `fetch_rates.<run_id>.log.txt` + dynamic outputs
 
 Before reading any output into the LLM, **check size/line-count first** and only load a slice (or search keywords) when the file is large.
 
@@ -205,7 +205,7 @@ Quick version — add to VS Code `prompts/global.instructions.md`:
 - Run code: `pyx run --code "..."`
 - Run async: `pyx run --code "await ..." --async`
 - Run with timeout: `pyx run --code "..." --timeout 30`
-- Run file (recommended for LLM/agent): `pyx run --file ".temp/pyx_task.py" -- ...`
+- Run file (recommended for LLM/agent): `pyx run --file "temp/pyx_task.py" -- ...`
 - (Legacy) Run base64 (interactive): `pyx run --base64 "..."`
 - Launch interpreter: `pyx python`
 - Install: `pyx add --package "name"`

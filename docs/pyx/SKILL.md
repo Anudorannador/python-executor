@@ -19,16 +19,16 @@ Use pyx for safe Python execution. **Default: PYX_STRICT_JSON_IO mode**.
 
 This is the **default** mode. All executions follow this pattern:
 
-1. **Write script** to `.temp/<task>.py`
+1. **Write script** to `temp/<task>.py`
 2. **Input**: Read from JSON file (`--input-path`)
 3. **Output**: Write to files only (manifest + data)
 4. **Stdout**: Summary only (paths + sizes)
 
 ```bash
-pyx ensure-temp --dir ".temp"
-# Write: .temp/task.py
-# Write: .temp/task.input.json (if needed)
-pyx run --file ".temp/task.py" --input-path ".temp/task.input.json"
+pyx ensure-temp --dir "temp"
+# Write: temp/task.py
+# Write: temp/task.input.json (if needed)
+pyx run --file "temp/task.py" --input-path "temp/task.input.json"
 ```
 
 ### Environment Variables (auto-set by pyx)
@@ -48,7 +48,7 @@ Use only when user explicitly says:
 - "simple mode"
 
 ```bash
-pyx run --file ".temp/task.py"
+pyx run --file "temp/task.py"
 ```
 
 ## Golden Rule
@@ -60,16 +60,16 @@ pyx run --file ".temp/task.py"
 pyx run --code "import os; print(os.listdir())"
 
 # ✅ CORRECT
-pyx ensure-temp --dir ".temp"
-# Write code to: .temp/list_files.py
-pyx run --file ".temp/list_files.py"
+pyx ensure-temp --dir "temp"
+# Write code to: temp/list_files.py
+pyx run --file "temp/list_files.py"
 ```
 
 ## Quick Reference
 
 | Task | Command |
 |------|---------|
-| Create temp dir | `pyx ensure-temp --dir ".temp"` |
+| Create temp dir | `pyx ensure-temp --dir "temp"` |
 | Run script | `pyx run --file "script.py"` |
 | Run with input | `pyx run --file "script.py" --input-path "input.json"` |
 | Run with timeout | `pyx run --file "script.py" --timeout 30` |

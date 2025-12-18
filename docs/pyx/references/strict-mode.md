@@ -11,7 +11,7 @@ Opt-out only when user explicitly says:
 
 ## Rules
 
-1. **Script Location**: Always under `.temp/`
+1. **Script Location**: Always under `temp/`
 2. **Input**: Read from JSON file (path via `--input-path`)
 3. **Output**: Write to files only (manifest + data files)
 4. **Stdout**: Short summary only (paths + sizes + tiny preview)
@@ -20,7 +20,7 @@ Opt-out only when user explicitly says:
 ## Naming Convention
 
 ```
-.temp/
+temp/
 ├── <task>.py                          # Script
 ├── <task>.<variant>.input.json        # Input
 ├── <task>.<run_id>.manifest.json      # Manifest
@@ -48,11 +48,11 @@ run_id = os.environ['PYX_RUN_ID']                  # Unique run ID
 {
   "run_id": "20231217_143052",
   "success": true,
-  "output_dir": "/path/to/.temp",
-  "input_path": "/path/to/.temp/task.input.json",
+  "output_dir": "/path/to/temp",
+  "input_path": "/path/to/temp/task.input.json",
   "outputs": [
     {
-      "path": "/path/to/.temp/task.20231217_143052.result.txt",
+      "path": "/path/to/temp/task.20231217_143052.result.txt",
       "role": "result",
       "category": "data",
       "format": "text"
@@ -65,7 +65,7 @@ run_id = os.environ['PYX_RUN_ID']                  # Unique run ID
 
 ### 1. Create input file
 
-`.temp/fetch_data.input.json`:
+`temp/fetch_data.input.json`:
 ```json
 {
   "url": "https://api.example.com/data",
@@ -75,7 +75,7 @@ run_id = os.environ['PYX_RUN_ID']                  # Unique run ID
 
 ### 2. Create script
 
-`.temp/fetch_data.py`:
+`temp/fetch_data.py`:
 ```python
 import os
 import json
@@ -104,7 +104,7 @@ print(f'Result saved: {output_file} ({output_file.stat().st_size} bytes)')
 ### 3. Execute
 
 ```bash
-pyx run --file ".temp/fetch_data.py" --input-path ".temp/fetch_data.input.json"
+pyx run --file "temp/fetch_data.py" --input-path "temp/fetch_data.input.json"
 ```
 
 ## Size Check Before Reading

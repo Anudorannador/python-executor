@@ -402,7 +402,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
         "--output-dir",
         type=str,
         default=None,
-        help="Directory used for auto-generated outputs (default: .temp). If --input-path is provided, its directory is used by default.",
+        help="Directory used for auto-generated outputs (default: temp). If --input-path is provided, its directory is used by default.",
     )
     run_group = run_parser.add_mutually_exclusive_group(required=True)
     run_group.add_argument("--code", "-c", type=str, help="Inline Python code to execute")
@@ -514,7 +514,7 @@ def main() -> NoReturn | None:
             if file_path:
                 return Path(file_path).resolve().parent
 
-            return Path(".temp")
+            return Path("temp")
 
         def _resolve_manifest_path(output_dir: Path, base: str, run_id: str) -> Path:
             configured = getattr(args, "output_path", None)

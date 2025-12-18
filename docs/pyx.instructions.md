@@ -36,9 +36,9 @@ Writing a file avoids shell parsing entirely.
 **✅ Required execution pattern (LLM/agent):**
 
 ```bash
-pyx ensure-temp --dir ".temp"
-# Write code to: .temp/pyx_task.py
-pyx run --file ".temp/pyx_task.py" -- --any --args
+pyx ensure-temp --dir "temp"
+# Write code to: temp/pyx_task.py
+pyx run --file "temp/pyx_task.py" -- --any --args
 ```
 
 ## Strict Mode Trigger Phrase
@@ -49,8 +49,8 @@ If the user includes this exact phrase anywhere in the prompt:
 
 Then you MUST follow these rules:
 
-1. Create a task script under `.temp/` (never inline code in the shell).
-2. All inputs MUST be read from a JSON file (path provided by the user or created under `.temp/`).
+1. Create a task script under `temp/` (never inline code in the shell).
+2. All inputs MUST be read from a JSON file (path provided by the user or created under `temp/`).
 3. All outputs MUST be written to files (prefer `.txt` for human-readable summaries).
 4. Stdout MUST be a short summary only: manifest/log paths + sizes + tiny preview.
 5. Before reading any output content into the LLM context, you MUST check its size/line-count.
@@ -68,11 +68,11 @@ Instead, enforce this contract:
 
 **Recommended naming convention:**
 
-- Script: `.temp/<task>.py`
-- Input: `.temp/<task>.<variant>.input.json`
-- Manifest: `.temp/<task>.<run_id>.manifest.json`
-- Log: `.temp/<task>.<run_id>.log.txt`
-- Outputs: `.temp/<task>.<variant>.<run_id>.<ext>` (dynamic; based on content/category)
+- Script: `temp/<task>.py`
+- Input: `temp/<task>.<variant>.input.json`
+- Manifest: `temp/<task>.<run_id>.manifest.json`
+- Log: `temp/<task>.<run_id>.log.txt`
+- Outputs: `temp/<task>.<variant>.<run_id>.<ext>` (dynamic; based on content/category)
 
 Example variants: `fetch_rates.a.input.json` -> `fetch_rates.<run_id>.manifest.json` + `fetch_rates.<run_id>.log.txt` + dynamic outputs (tracked by the manifest).
 
@@ -134,7 +134,7 @@ def head(path: Path, n: int = 50) -> str:
 2. **NEVER** embed Python code into a shell command string (e.g., do not write `import base64` in a terminal command).
 3. **ALWAYS** write a `.py` file and run it with `pyx run --file`.
 4. For external commands, use Python `subprocess.run([...], shell=False)` inside the `.py` file.
-5. Put any complex input (JSON, regex, long strings) into files (e.g., `.temp/input.json`) and read them in Python.
+5. Put any complex input (JSON, regex, long strings) into files (e.g., `temp/input.json`) and read them in Python.
 6. Use `--timeout` for potentially long operations; use `--cwd` instead of `cd`.
 7. Use `pyx info` if unsure about the environment.
 
@@ -567,7 +567,7 @@ options:
   --output-path OUTPUT_PATH
                         Optional manifest path (Strategy A). If not provided, pyx writes <base>.<run_id>.manifest.json into the resolved output directory.
   --output-dir OUTPUT_DIR
-                        Directory used for auto-generated outputs (default: .temp). If --input-path is provided, its directory is used by default.
+                        Directory used for auto-generated outputs (default: temp). If --input-path is provided, its directory is used by default.
   --code CODE, -c CODE  Inline Python code to execute
   --file FILE, -f FILE  Path to a Python script file. Use -- to pass args to script.
   --base64 BASE64, -b BASE64
