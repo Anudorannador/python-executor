@@ -254,12 +254,32 @@ Use `pyx info --env` to see available keys (values hidden).
 | Variable | Description |
 |----------|-------------|
 | `PYX_INSTRUCTIONS_PATH` | Output path for `pyx gi`. Default: `./docs/pyx.instructions.md`. |
+| `PYX_SKILL_PATH` | Output path for `pyx gs`. Default: `./docs/pyx`. |
 | `PYX_PYX_INSTRUCTIONS_STYLE` | pyx-usage section style in the combined file. Allowed: `file` (recommended) or `base64` (legacy). |
+
+### UV Proxy & Index Variables
+
+These variables configure proxy and package index for `pyx add` and `pyx python`:
+
+| Variable | Description |
+|----------|-------------|
+| `PYX_UV_HTTP_PROXY` | HTTP proxy for UV/pip (maps to `HTTP_PROXY`) |
+| `PYX_UV_HTTPS_PROXY` | HTTPS proxy for UV/pip (maps to `HTTPS_PROXY`) |
+| `PYX_UV_NO_PROXY` | Hosts to bypass proxy (maps to `NO_PROXY`) |
+| `PYX_UV_INDEX_URL` | Custom PyPI mirror (maps to `UV_INDEX_URL`) |
 
 Example (in `%APPDATA%\pyx\.env`):
 
 ```bash
 PYX_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.instructions.md
+
+# Proxy settings (China/corporate network)
+PYX_UV_HTTP_PROXY=http://proxy.example.com:8080
+PYX_UV_HTTPS_PROXY=http://proxy.example.com:8080
+PYX_UV_NO_PROXY=localhost,127.0.0.1
+
+# Use Tsinghua mirror for faster downloads in China
+PYX_UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 > **Note:** `PYX_*` variables are pyx internal configuration and are **excluded** from the generated instructions file.

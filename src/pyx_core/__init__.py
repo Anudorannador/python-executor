@@ -28,6 +28,7 @@ from .executor import (
     run_async_code,
     add_package,
     ensure_temp,
+    get_uv_env,
 )
 
 from .environment import (

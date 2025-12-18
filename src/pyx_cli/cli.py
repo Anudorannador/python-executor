@@ -48,6 +48,7 @@ from pyx_core import (  # noqa: E402
     ensure_temp,
     get_environment_info,
     format_environment_info,
+    get_uv_env,
     generate_pyx_instructions,
     generate_shell_instructions,
     generate_skill_files,
@@ -640,6 +641,9 @@ def main() -> NoReturn | None:
             sys.exit(0 if result.success else 1)
     elif args.command == "python":
         # `.env` is loaded at module import time (see top of this file).
+        # Apply UV proxy/index settings to environment before exec
+        env = get_uv_env()
+        os.environ.update(env)
         # Replace the current process with the interpreter so interactive REPL behaves normally.
         python_args = getattr(args, "python_args", None) or []
         if python_args and python_args[0] == "--":

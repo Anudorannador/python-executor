@@ -68,6 +68,34 @@ def _validate_syntax(code: str) -> tuple[bool, str | None]:
         return False, "\n".join(error_lines)
 
 
+def get_uv_env() -> dict[str, str]:
+    """Get environment variables for UV/pip with proxy and index settings.
+    
+    Maps PYX_UV_* variables to standard proxy/index variables.
+    
+    Returns:
+        Environment dict with proxy settings applied
+    """
+    env = os.environ.copy()
+    
+    # Map PYX_UV_* to standard proxy variables
+    if proxy := os.environ.get("PYX_UV_HTTP_PROXY"):
+        env["HTTP_PROXY"] = proxy
+        env["http_proxy"] = proxy
+    if proxy := os.environ.get("PYX_UV_HTTPS_PROXY"):
+        env["HTTPS_PROXY"] = proxy
+        env["https_proxy"] = proxy
+    if no_proxy := os.environ.get("PYX_UV_NO_PROXY"):
+        env["NO_PROXY"] = no_proxy
+        env["no_proxy"] = no_proxy
+    
+    # Map PYX_UV_INDEX_URL to UV_INDEX_URL (used by uv)
+    if index_url := os.environ.get("PYX_UV_INDEX_URL"):
+        env["UV_INDEX_URL"] = index_url
+    
+    return env
+
+
 @dataclass
 class ExecutionResult:
     """Result of code execution.
@@ -631,6 +659,12 @@ def add_package(package: str) -> ExecutionResult:
     """
     Install a package using uv to optional-dependencies[full].
     
+    Uses PYX_UV_* environment variables for proxy and index settings:
+    - PYX_UV_HTTP_PROXY -> HTTP_PROXY
+    - PYX_UV_HTTPS_PROXY -> HTTPS_PROXY
+    - PYX_UV_NO_PROXY -> NO_PROXY
+    - PYX_UV_INDEX_URL -> UV_INDEX_URL
+    
     Args:
         package: Package name to install (e.g., 'requests', 'pandas>=2.0')
         
@@ -638,12 +672,14 @@ def add_package(package: str) -> ExecutionResult:
         ExecutionResult with success status and output
     """
     try:
+        env = get_uv_env()
         result = subprocess.run(
             ["uv", "add", "--optional", "full", package],
             check=True,
             capture_output=True,
             text=True,
             cwd=_PACKAGE_ROOT,  # Run in python-executor directory
+            env=env,
         )
         output = result.stdout
         if result.stderr:
