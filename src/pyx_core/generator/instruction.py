@@ -443,11 +443,11 @@ def _build_lines_file(info: EnvironmentInfo, env_keys_with_usage: dict[str, str]
     lines.append("```")
     lines.append("")
 
-    lines.append("## Strict Mode Trigger Phrase")
+    lines.append("## MANIFEST_IO Mode Trigger Phrase")
     lines.append("")
     lines.append("If the user includes this exact phrase anywhere in the prompt:")
     lines.append("")
-    lines.append("`PYX_STRICT_JSON_IO`")
+    lines.append("`MANIFEST_IO`")
     lines.append("")
     lines.append("Then you MUST follow these rules:")
     lines.append("")

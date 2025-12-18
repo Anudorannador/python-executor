@@ -5,24 +5,24 @@ Details about the pyx execution environment.
 ## System
 
 - **OS**: Windows (AMD64)
-- **Shell**: powershell (`pwsh`)
-- **Python**: 3.12.x
+- **Shell**: powershell (`C:\Program Files\PowerShell\7\pwsh.EXE`)
+- **Python**: 3.12.12
 - **pyx version**: 0.1.0
 
 ## Paths
 
 ```text
-pyx executable: ~/.local/bin/pyx
-pyx-mcp executable: ~/.local/bin/pyx-mcp
-pyx Python: <uv-tools>/python-executor-mcp/Scripts/python.exe
+pyx executable: C:\Users\<USER>\.local\bin\pyx.EXE
+pyx-mcp executable: C:\Users\<USER>\.local\bin\pyx-mcp.EXE
+pyx Python: C:\Users\<USER>\AppData\Roaming\uv\tools\python-executor-mcp\Scripts\python.exe
 ```
 
 ## Module Locations
 
 ```text
-pyx_core.__file__: <repo>/src/pyx_core/__init__.py
-pyx_cli.__file__: <repo>/src/pyx_cli/__init__.py
-pyx_mcp.__file__: <repo>/src/pyx_mcp/__init__.py
+pyx_core.__file__: C:\Users\<USER>\repo\python-executor\src\pyx_core\__init__.py
+pyx_cli.__file__: C:\Users\<USER>\repo\python-executor\src\pyx_cli\__init__.py
+pyx_mcp.__file__: C:\Users\<USER>\repo\python-executor\src\pyx_mcp\__init__.py
 ```
 
 ## Available System Commands

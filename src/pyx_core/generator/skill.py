@@ -3,7 +3,7 @@ Claude Skill generation for python-executor.
 
 Generates Claude Code skill files:
 - SKILL.md (core instructions)
-- references/strict-mode.md
+- references/manifest-io.md (MANIFEST_IO details)
 - references/commands.md  
 - references/environment.md
 """
@@ -33,7 +33,7 @@ def generate_skill_files(
     
     Creates:
       - SKILL.md (core instructions, concise)
-      - references/strict-mode.md (PYX_STRICT_JSON_IO details)
+      - references/manifest-io.md (MANIFEST_IO details, universal workflow)
       - references/commands.md (CLI help)
       - references/environment.md (environment info + packages)
     
@@ -73,10 +73,10 @@ def generate_skill_files(
     files_created.append(str(skill_path.resolve()))
     
     # ==========================================================================
-    # 2. references/strict-mode.md (PYX_STRICT_JSON_IO details)
+    # 2. references/manifest-io.md (MANIFEST_IO universal workflow)
     # ==========================================================================
-    strict_md = _generate_strict_mode_md(info)
-    strict_path = refs_path / "strict-mode.md"
+    strict_md = _generate_manifest_io_md(info)
+    strict_path = refs_path / "manifest-io.md"
     _write_with_backup(strict_path, strict_md, force=force)
     files_created.append(str(strict_path.resolve()))
     
@@ -134,7 +134,7 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     # Frontmatter
     lines.append("---")
     lines.append("name: pyx")
-    lines.append('description: "Safe Python code execution using pyx CLI. Use when: running Python, executing scripts, testing code. Triggers: pyx, run python, execute code, test script. Default mode: PYX_STRICT_JSON_IO (file-first with JSON I/O)."')
+    lines.append('description: "Safe Python code execution using pyx CLI. Use when: running Python, executing scripts, testing code. Triggers: pyx, run python, execute code, test script. Default mode: MANIFEST_IO (file-first with manifest output)."')
     lines.append("version: 0.1.0")
     lines.append("---")
     lines.append("")
@@ -142,7 +142,7 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     # Header
     lines.append("# pyx Executor")
     lines.append("")
-    lines.append("Use pyx for safe Python execution. **Default: PYX_STRICT_JSON_IO mode**.")
+    lines.append("Use pyx for safe Python execution. **Default: MANIFEST_IO mode**.")
     lines.append("")
     
     # Environment summary
@@ -154,15 +154,30 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     lines.append(f"- **pyx version**: {info.pyx_version}")
     lines.append("")
     
-    # PYX_STRICT_JSON_IO section (PRIORITY)
-    lines.append("## PYX_STRICT_JSON_IO Mode (Default)")
+    # MANIFEST_IO section (PRIORITY)
+    lines.append("## MANIFEST_IO Mode (Default)")
     lines.append("")
-    lines.append("This is the **default** mode. All executions follow this pattern:")
+    lines.append("A **universal file-first workflow** for LLM/Agent code execution.")
+    lines.append("Works with ANY local environment: **pyx**, **Python venv**, **uv**, **Node.js**, etc.")
     lines.append("")
-    lines.append("1. **Write script** to `temp/<task>.py`")
-    lines.append("2. **Input**: Read from JSON file (`--input-path`)")
-    lines.append("3. **Output**: Write to files only (manifest + data)")
-    lines.append("4. **Stdout**: Summary only (paths + sizes)")
+    lines.append("### Core Principles")
+    lines.append("")
+    lines.append("1. **Input**: Read from JSON file (not CLI args)")
+    lines.append("2. **Output**: Write to files (manifest + data)")
+    lines.append("3. **Stdout**: Summary only (paths + sizes)")
+    lines.append("4. **Size Check**: Always check output size before reading into LLM context")
+    lines.append("")
+    lines.append("### Environment Detection")
+    lines.append("")
+    lines.append("| Indicator | Environment | Run Command |")
+    lines.append("|-----------|-------------|-------------|")
+    lines.append("| `pyx` available | pyx | `pyx run --file \"temp/task.py\"` |")
+    lines.append("| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` (Unix) or `.venv\\\\Scripts\\\\python temp/task.py` (Win) |")
+    lines.append("| `uv.lock` exists | uv project | `uv run python temp/task.py` |")
+    lines.append("| `node_modules/` exists | Node.js | `node temp/task.js` |")
+    lines.append("| `package.json` (no modules) | Node.js | `npm install && node temp/task.js` |")
+    lines.append("")
+    lines.append("### With pyx (Recommended)")
     lines.append("")
     lines.append("```bash")
     lines.append('pyx ensure-temp --dir "temp"')
@@ -229,7 +244,7 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("")
     lines.append("For detailed documentation, read these files when needed:")
     lines.append("")
-    lines.append("- [Strict Mode Details](references/strict-mode.md) - Complete I/O contract and examples")
+    lines.append("- [MANIFEST_IO Details](references/manifest-io.md) - Complete I/O contract, multi-environment examples")
     lines.append("- [CLI Commands](references/commands.md) - Full CLI help output")
     lines.append("- [Environment Info](references/environment.md) - Paths, packages, shell info")
     lines.append("")
@@ -237,13 +252,23 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     return "\n".join(lines)
 
 
-def _generate_strict_mode_md(info: "EnvironmentInfo") -> str:
-    """Generate references/strict-mode.md content."""
+def _generate_manifest_io_md(info: "EnvironmentInfo") -> str:
+    """Generate references/manifest-io.md content."""
     lines: list[str] = []
     
-    lines.append("# PYX_STRICT_JSON_IO Mode")
+    lines.append("# MANIFEST_IO Mode")
     lines.append("")
-    lines.append("Complete specification for strict mode execution.")
+    lines.append("A **universal file-first workflow** for LLM/Agent code execution.")
+    lines.append("Works with ANY local environment: pyx, Python venv, uv, Node.js, etc.")
+    lines.append("")
+    
+    # Core Principles
+    lines.append("## Core Principles")
+    lines.append("")
+    lines.append("1. **Input**: Read from JSON file (not CLI args)")
+    lines.append("2. **Output**: Write to files (manifest + data files)")
+    lines.append("3. **Stdout**: Short summary only (paths + sizes + tiny preview)")
+    lines.append("4. **Size Check**: Before reading output into LLM context, check size first")
     lines.append("")
     
     # Trigger
@@ -252,36 +277,41 @@ def _generate_strict_mode_md(info: "EnvironmentInfo") -> str:
     lines.append("This mode is **DEFAULT**. No trigger phrase needed.")
     lines.append("")
     lines.append("Opt-out only when user explicitly says:")
-    lines.append("- \"no strict mode\" / \"simple mode\"")
+    lines.append('- "no strict mode" / "simple mode"')
     lines.append("")
     
-    # Rules
-    lines.append("## Rules")
-    lines.append("")
-    lines.append("1. **Script Location**: Always under `temp/`")
-    lines.append("2. **Input**: Read from JSON file (path via `--input-path`)")
-    lines.append("3. **Output**: Write to files only (manifest + data files)")
-    lines.append("4. **Stdout**: Short summary only (paths + sizes + tiny preview)")
-    lines.append("5. **Size Check**: Before reading output, check size first")
-    lines.append("")
-    
-    # Naming Convention
-    lines.append("## Naming Convention")
+    # Directory Structure
+    lines.append("## Directory Structure (Universal)")
     lines.append("")
     lines.append("```")
     lines.append("temp/")
-    lines.append("├── <task>.py                          # Script")
-    lines.append("├── <task>.<variant>.input.json        # Input")
-    lines.append("├── <task>.<run_id>.manifest.json      # Manifest")
+    lines.append("├── <task>.py|.js                      # Script (Python or Node.js)")
+    lines.append("├── <task>.input.json                  # Input")
+    lines.append("├── <task>.<run_id>.manifest.json      # Manifest (output index)")
     lines.append("├── <task>.<run_id>.log.txt            # Log (stdout/stderr)")
-    lines.append("└── <task>.<variant>.<run_id>.<ext>    # Output files")
+    lines.append("└── <task>.<run_id>.<ext>              # Output files")
     lines.append("```")
     lines.append("")
     
-    # Environment Variables
-    lines.append("## Environment Variables")
+    # Environment Detection
+    lines.append("## Environment Detection")
     lines.append("")
-    lines.append("pyx automatically sets these for your script:")
+    lines.append("Detect the local environment and use the appropriate run command:")
+    lines.append("")
+    lines.append("| Indicator | Environment | Run Command |")
+    lines.append("|-----------|-------------|-------------|")
+    lines.append("| `pyx` available | pyx (recommended) | `pyx run --file \"temp/task.py\" --input-path \"temp/task.input.json\"` |")
+    lines.append("| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` (Unix) or `.venv\\\\Scripts\\\\python temp/task.py` (Windows) |")
+    lines.append("| `uv.lock` exists | uv project | `uv run python temp/task.py` |")
+    lines.append("| `node_modules/` exists | Node.js | `node temp/task.js` |")
+    lines.append("| `package.json` only | Node.js (needs install) | `npm install && node temp/task.js` |")
+    lines.append("| None of above | System Python/Node | `python temp/task.py` or `node temp/task.js` |")
+    lines.append("")
+    
+    # pyx Example (with env vars)
+    lines.append("## Using pyx (Recommended)")
+    lines.append("")
+    lines.append("pyx automatically sets environment variables for your script:")
     lines.append("")
     lines.append("```python")
     lines.append("import os")
@@ -291,6 +321,81 @@ def _generate_strict_mode_md(info: "EnvironmentInfo") -> str:
     lines.append("output_path = os.environ['PYX_OUTPUT_PATH']        # Manifest path")
     lines.append("log_path = os.environ['PYX_LOG_PATH']              # Log file path")
     lines.append("run_id = os.environ['PYX_RUN_ID']                  # Unique run ID")
+    lines.append("```")
+    lines.append("")
+    lines.append("### pyx Example")
+    lines.append("")
+    lines.append("```bash")
+    lines.append('pyx ensure-temp --dir "temp"')
+    lines.append("# Write: temp/fetch_data.py")
+    lines.append("# Write: temp/fetch_data.input.json")
+    lines.append('pyx run --file "temp/fetch_data.py" --input-path "temp/fetch_data.input.json"')
+    lines.append("```")
+    lines.append("")
+    
+    # venv Example
+    lines.append("## Using Python venv")
+    lines.append("")
+    lines.append("When `.venv/` exists in the project:")
+    lines.append("")
+    lines.append("```bash")
+    lines.append("# Unix/macOS")
+    lines.append("mkdir -p temp")
+    lines.append("# Write: temp/task.py (reads input from sys.argv or hardcoded path)")
+    lines.append("# Write: temp/task.input.json")
+    lines.append(".venv/bin/python temp/task.py")
+    lines.append("")
+    lines.append("# Windows")
+    lines.append("mkdir temp 2>nul")
+    lines.append(".venv\\Scripts\\python temp\\task.py")
+    lines.append("```")
+    lines.append("")
+    
+    # uv Example
+    lines.append("## Using uv")
+    lines.append("")
+    lines.append("When `uv.lock` exists in the project:")
+    lines.append("")
+    lines.append("```bash")
+    lines.append("mkdir -p temp  # or: mkdir temp 2>nul (Windows)")
+    lines.append("# Write: temp/task.py")
+    lines.append("# Write: temp/task.input.json")
+    lines.append("uv run python temp/task.py")
+    lines.append("```")
+    lines.append("")
+    
+    # Node.js Example
+    lines.append("## Using Node.js")
+    lines.append("")
+    lines.append("When `node_modules/` exists:")
+    lines.append("")
+    lines.append("```bash")
+    lines.append("mkdir -p temp")
+    lines.append("# Write: temp/task.js")
+    lines.append("# Write: temp/task.input.json")
+    lines.append("node temp/task.js")
+    lines.append("```")
+    lines.append("")
+    lines.append("Node.js script example:")
+    lines.append("")
+    lines.append("```javascript")
+    lines.append("const fs = require('fs');")
+    lines.append("const path = require('path');")
+    lines.append("")
+    lines.append("// Read input")
+    lines.append("const inputPath = process.argv[2] || 'temp/task.input.json';")
+    lines.append("const config = JSON.parse(fs.readFileSync(inputPath, 'utf8'));")
+    lines.append("")
+    lines.append("// Do work...")
+    lines.append("const result = { status: 'ok', count: 42 };")
+    lines.append("")
+    lines.append("// Write output")
+    lines.append("const runId = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);")
+    lines.append("const outputFile = `temp/task.${runId}.result.json`;")
+    lines.append("fs.writeFileSync(outputFile, JSON.stringify(result, null, 2));")
+    lines.append("")
+    lines.append("// Print summary only")
+    lines.append("console.log(`Result saved: ${outputFile} (${fs.statSync(outputFile).size} bytes)`);")
     lines.append("```")
     lines.append("")
     
@@ -315,8 +420,8 @@ def _generate_strict_mode_md(info: "EnvironmentInfo") -> str:
     lines.append("```")
     lines.append("")
     
-    # Complete Example
-    lines.append("## Complete Example")
+    # Complete pyx Example
+    lines.append("## Complete Example (pyx)")
     lines.append("")
     lines.append("### 1. Create input file")
     lines.append("")

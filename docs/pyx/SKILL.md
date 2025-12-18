@@ -1,12 +1,12 @@
 ---
 name: pyx
-description: "Safe Python code execution using pyx CLI. Use when: running Python, executing scripts, testing code. Triggers: pyx, run python, execute code, test script. Default mode: PYX_STRICT_JSON_IO (file-first with JSON I/O)."
+description: "Safe Python code execution using pyx CLI. Use when: running Python, executing scripts, testing code. Triggers: pyx, run python, execute code, test script. Default mode: MANIFEST_IO (file-first with manifest output)."
 version: 0.1.0
 ---
 
 # pyx Executor
 
-Use pyx for safe Python execution. **Default: PYX_STRICT_JSON_IO mode**.
+Use pyx for safe Python execution. **Default: MANIFEST_IO mode**.
 
 ## Current Environment
 
@@ -15,14 +15,29 @@ Use pyx for safe Python execution. **Default: PYX_STRICT_JSON_IO mode**.
 - **pyx Python**: 3.12.12
 - **pyx version**: 0.1.0
 
-## PYX_STRICT_JSON_IO Mode (Default)
+## MANIFEST_IO Mode (Default)
 
-This is the **default** mode. All executions follow this pattern:
+A **universal file-first workflow** for LLM/Agent code execution.
+Works with ANY local environment: **pyx**, **Python venv**, **uv**, **Node.js**, etc.
 
-1. **Write script** to `temp/<task>.py`
-2. **Input**: Read from JSON file (`--input-path`)
-3. **Output**: Write to files only (manifest + data)
-4. **Stdout**: Summary only (paths + sizes)
+### Core Principles
+
+1. **Input**: Read from JSON file (not CLI args)
+2. **Output**: Write to files (manifest + data)
+3. **Stdout**: Summary only (paths + sizes)
+4. **Size Check**: Always check output size before reading into LLM context
+
+### Environment Detection
+
+| Indicator | Environment | Run Command |
+|-----------|-------------|-------------|
+| `pyx` available | pyx | `pyx run --file "temp/task.py"` |
+| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` (Unix) or `.venv\\Scripts\\python temp/task.py` (Win) |
+| `uv.lock` exists | uv project | `uv run python temp/task.py` |
+| `node_modules/` exists | Node.js | `node temp/task.js` |
+| `package.json` (no modules) | Node.js | `npm install && node temp/task.js` |
+
+### With pyx (Recommended)
 
 ```bash
 pyx ensure-temp --dir "temp"
@@ -81,6 +96,6 @@ pyx run --file "temp/list_files.py"
 
 For detailed documentation, read these files when needed:
 
-- [Strict Mode Details](references/strict-mode.md) - Complete I/O contract and examples
+- [MANIFEST_IO Details](references/manifest-io.md) - Complete I/O contract, multi-environment examples
 - [CLI Commands](references/commands.md) - Full CLI help output
 - [Environment Info](references/environment.md) - Paths, packages, shell info

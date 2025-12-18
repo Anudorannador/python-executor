@@ -14,9 +14,9 @@ When LLMs generate shell commands, they often fail due to platform differences:
 | Missing tools | `curl`, `jq`, `grep` | Pre-installed packages |
 | Environment | Manual setup | Auto-loads `.env` files |
 
-### Strict Prompting (PYX_STRICT_JSON_IO)
+### MANIFEST_IO Mode
 
-If you include the exact phrase `PYX_STRICT_JSON_IO` in your prompt, the generated instructions treat it as a **strict-mode trigger** that forces a safer workflow:
+If you include the exact phrase `MANIFEST_IO` in your prompt, the generated instructions treat it as a **strict-mode trigger** that forces a safer workflow:
 
 - **Input must be JSON on disk** (no huge payloads in CLI args)
 - **Output must be written to a file** (prevents token blow-ups)
@@ -114,7 +114,7 @@ By default, when `--input-path` is provided, `PYX_OUTPUT_DIR` is set to the inpu
 
 `pyx run` is designed to support this workflow: it always sets `PYX_OUTPUT_PATH` (manifest), `PYX_OUTPUT_DIR`, `PYX_RUN_ID`, and `PYX_LOG_PATH`. You can optionally pass `--input-path` / `--output-path` to standardize I/O.
 
-If you want to hard-enforce this workflow in prompting, include the exact phrase `PYX_STRICT_JSON_IO` in your prompt; the generated instructions treat it as a strict-mode trigger.
+If you want to hard-enforce this workflow in prompting, include the exact phrase `MANIFEST_IO` in your prompt; the generated instructions treat it as a strict-mode trigger.
 
 ## LLM/Agent Integration
 
