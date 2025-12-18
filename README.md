@@ -16,11 +16,25 @@ When LLMs generate shell commands, they often fail due to platform differences:
 
 ### MANIFEST_IO Mode
 
-If you include the exact phrase `MANIFEST_IO` in your prompt, the generated instructions treat it as a **strict-mode trigger** that forces a safer workflow:
+A **universal file-first workflow** for LLM/Agent code execution. Works with ANY local environment.
 
-- **Input must be JSON on disk** (no huge payloads in CLI args)
-- **Output must be written to a file** (prevents token blow-ups)
-- **Small outputs can be included fully**, but **large outputs must be size-checked** and only sliced/searched before feeding into the LLM
+If you include the exact phrase `MANIFEST_IO` in your prompt, the generated instructions enforce:
+
+- **Input**: Read from JSON file (not CLI args)
+- **Output**: Write to files (manifest + data)
+- **Stdout**: Summary only (paths + sizes)
+- **Size Check**: Always check output size before reading into LLM context
+
+**Environment Detection:**
+
+| Indicator | Environment | Run Command |
+|-----------|-------------|-------------|
+| `pyx` available | pyx (recommended) | `pyx run --file "temp/task.py"` |
+| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` |
+| `uv.lock` exists | uv project | `uv run python temp/task.py` |
+| `node_modules/` exists | Node.js | `node temp/task.js` |
+
+See [docs/pyx/references/manifest-io.md](docs/pyx/references/manifest-io.md) for complete examples.
 
 ## Quick Start (Local Development)
 
