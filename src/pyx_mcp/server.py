@@ -44,6 +44,7 @@ from pyx_core import (
     generate_instructions,
     generate_pyx_instructions,
     generate_shell_instructions,
+    generate_skill_files,
     save_with_backup,
 )
 
@@ -271,6 +272,26 @@ async def list_tools() -> list[Tool]:
                         "type": "boolean",
                         "description": "Create numbered backup if file exists. Default: true.",
                         "default": True
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="generate_pyx_skill",
+            description="Generate pyx skill files (SKILL.md + references/) that teach LLM how to use pyx CLI and MANIFEST_IO workflow. This creates a complete Claude skill package for pyx. Use `pyx gs` CLI for the same functionality.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory to create skill files in. Default: './docs/pyx' or $PYX_SKILL_PATH.",
+                        "default": "./docs/pyx"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "Write mode: 'create' (new only), 'merge' (add to existing), 'overwrite' (replace). If not specified, auto-detects.",
+                        "enum": ["create", "merge", "overwrite"]
                     }
                 },
                 "required": []
@@ -721,6 +742,41 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(
             type="text",
             text=json.dumps(response, indent=2)
+        )]
+    
+    elif name == "generate_pyx_skill":
+        import os
+        
+        output_dir = arguments.get("output_dir") or os.environ.get("PYX_SKILL_PATH", "./docs/pyx")
+        mode = arguments.get("mode")
+        
+        # Determine force based on mode
+        force = mode == "overwrite"
+        
+        # Check if directory exists for mode validation
+        output_path = Path(output_dir)
+        exists = output_path.exists() and (output_path / "SKILL.md").exists()
+        
+        if mode == "create" and exists:
+            return [TextContent(
+                type="text",
+                text=f"✗ Skill already exists at {output_dir}. Use mode='merge' or mode='overwrite'."
+            )]
+        
+        result = generate_skill_files(output_dir, show_progress=False, force=force)
+        
+        if not result.success:
+            return [TextContent(
+                type="text",
+                text=f"✗ Failed to generate pyx skill: {result.error}"
+            )]
+        
+        mode_used = mode or ("overwrite" if exists else "create")
+        
+        return [TextContent(
+            type="text",
+            text=f"✓ Generated pyx skill at: {result.skill_dir}\n\nMode: {mode_used}\nFiles created:\n" + 
+                 "\n".join(f"  • {f}" for f in result.files_created)
         )]
     
     else:

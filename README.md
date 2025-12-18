@@ -155,11 +155,24 @@ Add to VS Code `settings.json`:
 | `run_python_code` | Execute inline Python code (supports `timeout`) |
 | `run_async_python_code` | Execute async code with top-level await (supports `timeout`) |
 | `run_python_file` | Execute a Python script file (supports `timeout`) |
-| `install_package` | Install a Python package |
+| `install_package` | Install a Python package (uses `PYX_UV_*` proxy settings) |
 | `ensure_directory` | Ensure a directory exists |
 | `get_environment_info` | Get OS, 20 shell syntax patterns (dynamically tested), env keys, 111 commands |
-| `generate_pyx_instructions` | Generate pyx-usage instructions (use pyx instead of shell) |
-| `generate_shell_instructions` | Generate shell-usage instructions (how to use current shell) |
+| `generate_pyx_instructions` | (Deprecated) Generate pyx-usage instructions |
+| `generate_shell_instructions` | (Deprecated) Generate shell-usage instructions |
+| `generate_pyx_skill` | Generate pyx skill files (teaches LLM how to use pyx) |
+
+### Skill-Based Learning (Universal)
+
+Extract reusable skills from any source (not limited to pyx):
+
+1. Say `learn skill` in chat
+2. LLM identifies source (task files, chat, code)
+3. Summarizes content (token-efficient, headers only)
+4. Scans existing skills (headers only)
+5. Recommends: `create` / `merge` / `overwrite`
+6. Generates SKILL preview
+7. **User confirms** → saves to `docs/<skill>/SKILL.md` (project) or `~/.claude/skills/<skill>/SKILL.md` (global)
 
 **Shell syntax patterns checked by `pyx info --syntax`:**
 

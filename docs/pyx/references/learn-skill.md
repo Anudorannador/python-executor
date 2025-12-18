@@ -1,261 +1,99 @@
-# pyx learn skill
+# learn skill
 
-Extract reusable skills from recent MANIFEST_IO task executions.
+Extract reusable skills from any source: task files, chat history, or any data-producing operation.
 
 ## Trigger
 
 Activate when user says:
-
-- "pyx learn skill"
-- "learn this as skill"
+- "learn skill"
 - "save as skill"
 - "distill skill"
+- "extract skill"
 
-## Workflow Overview
+## Input Sources
+
+Skills can be extracted from:
+- `temp/` task files (scripts, manifests, logs)
+- Chat conversation history
+- Any operation that produced data/code
+- User-provided code snippets or workflows
+
+## Output Format: Claude SKILL Standard
 
 ```
-1. Scan temp/ for recent tasks
-2. Summarize task (NOT full content)
-3. Scan existing recipes (headers only)
-4. Recommend: new / merge / skip
-5. Generate recipe markdown
-6. User confirms → save to project or global
+<skill_name>/
+├── SKILL.md           # Core instructions (required)
+└── references/        # Optional reference docs
+    └── <detail>.md
 ```
 
-## Step 1: Find Recent Task Files
+## Storage Locations
+
+| Location | Path | Use Case |
+|----------|------|----------|
+| Project | `docs/<skill_name>/SKILL.md` | Project-specific skills |
+| Global | `~/.claude/skills/<skill_name>/SKILL.md` | Cross-project skills |
+
+## Workflow
+
+```
+1. Identify source (files / chat / user input)
+2. Summarize content (token-efficient)
+3. Scan existing skills (headers ONLY)
+4. Recommend action: create / merge / overwrite
+5. Generate SKILL markdown
+6. **USER CONFIRMS** -> then save
+```
+
+## Summarize Content (Token-Efficient)
+
+**CRITICAL: DO NOT read full files. Extract summaries only.**
+
+For files:
+- Script: first 30 lines + last 10 lines
+- JSON: keys only, truncate values
+- Manifest: paths and sizes only
+- Log: first 10 lines only
+
+## Scan Existing Skills (Headers Only)
+
+**CRITICAL: DO NOT read full SKILL files. Token explosion risk.**
 
 ```bash
-# List recent files in temp/
-pyx run --file "temp/list_recent.py"
+# Project skills
+ls -d docs/*/SKILL.md 2>/dev/null || echo "(none)"
+
+# Global skills (Unix)
+ls -d ~/.claude/skills/*/SKILL.md 2>/dev/null || echo "(none)"
+
+# Global skills (Windows)
+dir /b "%USERPROFILE%\.claude\skills\*\SKILL.md" 2>nul || echo "(none)"
 ```
 
-Look for file patterns:
+For each SKILL.md, read ONLY lines 1-20 to extract name and description.
 
-- `temp/<task>.py` - Script
-- `temp/<task>.input.json` - Input
-- `temp/<task>.<run_id>.manifest.json` - Manifest
-- `temp/<task>.<run_id>.log.txt` - Log
+## Recommend Action
 
-**Important**: If multiple tasks exist, ask user which one to learn.
+| Mode | When to Use |
+|------|-------------|
+| `create` | No similar skill exists |
+| `merge` | Similar skill exists, add as variant/section |
+| `overwrite` | Replace existing skill entirely |
 
-## Step 2: Summarize Task (Token-Efficient)
+**If user does not specify mode, LLM decides and proposes.**
 
-**DO NOT read full file content into context.**
+## Preview Before Save
 
-Instead, extract summary:
+**ALWAYS show generated content to user before saving.**
 
-```python
-# Read script: first 30 lines + last 10 lines
-# Read input.json: keys only, not values
-# Read manifest: paths and sizes only
-# Read log: first 10 lines only
-```
+## User Confirmation Required
 
-Build mental summary:
+**NEVER save without explicit user confirmation.**
 
-- **Purpose**: What does this script do?
-- **Input**: What data does it need?
-- **Output**: What files does it produce?
-- **Dependencies**: What packages does it use?
-
-## Step 3: Scan Existing Skills (Headers Only)
-
-**CRITICAL: DO NOT read full recipe files. Token explosion risk.**
-
-### 3.1 List Recipe Files
-
-```bash
-# Project recipes
-ls docs/pyx/recipes/*.md 2>/dev/null || echo "(none)"
-
-# Global recipes (Unix)
-ls ~/.pyx/recipes/*.md 2>/dev/null || echo "(none)"
-
-# Global recipes (Windows)
-dir "%USERPROFILE%\.pyx\recipes\*.md" 2>nul || echo "(none)"
-```
-
-### 3.2 Extract Headers Only
-
-For each `.md` file, read ONLY lines 1-15 to extract:
-
-- Title (first `#` line)
-- Tags (from frontmatter or first paragraph)
-- Brief description
-
-### 3.3 Build Index
-
-Create mental index:
-
-| File | Title | Tags |
-|------|-------|------|
-| api_fetch.md | API Data Fetcher | api, http, json |
-| db_query.md | Database Query | mysql, query |
-| file_proc.md | File Processor | csv, excel |
-
-## Step 4: Recommend Action
-
-Based on task summary and existing index:
-
-| Condition | Recommendation |
-|-----------|----------------|
-| No similar recipe exists | **NEW**: Create new recipe |
-| Similar recipe exists (70%+ overlap) | **MERGE**: Add variant to existing |
-| Nearly identical recipe exists | **SKIP**: Already covered |
-
-Present recommendation to user:
-
-```
-Based on your task "Fetch API data with pagination":
-
-Existing recipes scanned: 5
-Similar recipe found: api_fetch.md (API Data Fetcher)
-
-Recommendation: MERGE
-- Add pagination variant to existing api_fetch.md
-
-Options:
-1. Merge to existing recipe
-2. Create as new recipe anyway
-3. Save to global recipes
-4. Cancel
-```
-
-## Step 5: Generate Recipe
-
-### Recipe Format
-
-```markdown
----
-name: <snake_case_name>
-tags: [tag1, tag2, tag3]
-created: YYYY-MM-DD
-source: temp/<task>.py
----
-
-# <Recipe Title>
-
-## When to Use
-
-- Scenario 1
-- Scenario 2
-
-## Quick Start
-
-1. Create input file...
-2. Run command...
-
-## Code Template
-
-\```python
-# Distilled, reusable code
-# Remove hardcoded values
-# Add configuration parameters
-\```
-
-## Input Schema
-
-\```json
-{
-  "param1": "description",
-  "param2": "description"
-}
-\```
-
-## Notes
-
-- Important consideration 1
-- Common pitfall to avoid
-```
-
-### Distillation Rules
-
-When generating code template:
-
-1. **Parameterize** - Replace hardcoded values with config
-2. **Generalize** - Remove task-specific logic
-3. **Document** - Add inline comments
-4. **Simplify** - Remove debug/temporary code
-
-## Step 6: Save Recipe
-
-### Project Recipes
-
-```bash
-# Ensure directory exists
-pyx ensure-temp --dir "docs/pyx/recipes"
-
-# Write recipe file
-# File: docs/pyx/recipes/<name>.md
-```
-
-### Global Recipes
-
-```bash
-# Unix/macOS
-mkdir -p ~/.pyx/recipes
-
-# Windows
-mkdir "%USERPROFILE%\.pyx\recipes" 2>nul
-
-# Write recipe file
-# File: ~/.pyx/recipes/<name>.md (Unix)
-# File: %USERPROFILE%\.pyx\recipes\<name>.md (Windows)
-```
-
-## Example Session
-
-**User**: pyx learn skill
-
-**Assistant**:
-
-```
-Scanning temp/ for recent tasks...
-
-Found:
-1. fetch_prices.py (2 min ago) - with manifest
-2. convert_excel.py (1 hour ago) - with manifest
-
-Which task to learn? [1/2]: 
-```
-
-**User**: 1
-
-**Assistant**:
-
-```
-Analyzing fetch_prices.py...
-
-Summary:
-- Purpose: Fetch cryptocurrency prices from exchange API
-- Input: list of symbols, timeframe
-- Output: JSON with OHLCV data
-- Packages: ccxt, pandas
-
-Scanning existing recipes...
-- Project: 3 recipes
-- Global: 2 recipes
-
-No similar recipe found.
-
-Recommendation: NEW
-Create new recipe: crypto_price_fetcher.md
-
-Generate recipe? [y/n]:
-```
-
-**User**: y
-
-**Assistant**: (generates recipe markdown)
-
-```
-Save to:
-1. Project (docs/pyx/recipes/)
-2. Global (~/.pyx/recipes/)
-3. Print only (don't save)
-```
+- `create`: Show preview, ask confirm
+- `merge`: Show diff, ask confirm
+- `overwrite`: Show warning, ask confirm
 
 ## Related
 
-- [MANIFEST_IO Mode](manifest-io.md) - The execution workflow that produces learnable tasks
-- [Commands Reference](commands.md) - pyx CLI commands
+- [MANIFEST_IO Mode](manifest-io.md) - File-first workflow for task execution
