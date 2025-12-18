@@ -561,6 +561,67 @@ def main() -> NoReturn | None:
             print(f"Manifest saved: {manifest_path} (bytes={manifest_size})")
             print(f"Log saved: {log_path} (bytes={log_size})")
 
+        def _extract_summary(file_path: Path | None, code: str | None) -> str:
+            """Extract summary from script docstring or first comment."""
+            content = None
+            if file_path and file_path.exists():
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+            elif code:
+                content = code
+            
+            if not content:
+                return ""
+            
+            lines = content.strip().splitlines()
+            # Try to extract docstring
+            if lines and (lines[0].startswith('"""') or lines[0].startswith("'''")):
+                quote = lines[0][:3]
+                if quote in lines[0][3:]:
+                    # Single line docstring
+                    return lines[0][3:].split(quote)[0].strip()[:100]
+                # Multi-line docstring
+                for i, line in enumerate(lines[1:], 1):
+                    if quote in line:
+                        return " ".join(lines[0][3:i]).strip()[:100]
+            # Try first comment
+            if lines and lines[0].startswith("#"):
+                return lines[0][1:].strip()[:100]
+            return ""
+
+        def _append_history(
+            output_dir: Path,
+            *,
+            run_id: str,
+            task: str,
+            manifest_path: Path,
+            success: bool,
+            source_file: Path | None = None,
+            code: str | None = None,
+        ) -> None:
+            """Append task execution to .history.jsonl for learn-skill recall."""
+            history_path = output_dir / ".history.jsonl"
+            summary = _extract_summary(source_file, code)
+            
+            entry = {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "run_id": run_id,
+                "task": task,
+                "manifest": str(manifest_path.name),
+                "success": success,
+                "summary": summary,
+            }
+            if source_file:
+                entry["source"] = str(source_file.name)
+            
+            try:
+                with history_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            except Exception:
+                pass  # Silent fail - history is optional
+
         # Handle --cwd option
         if args.cwd:
             if not os.path.isdir(args.cwd):
@@ -597,6 +658,7 @@ def main() -> NoReturn | None:
 
             _ensure_minimal_manifest(manifest_path, run_id=run_id, base=base, log_path=log_path, success=result.success)
             _print_manifest_and_log_summary(manifest_path, log_path)
+            _append_history(output_dir, run_id=run_id, task=base, manifest_path=manifest_path, success=result.success, code=args.code)
             if result.error and not result.success:
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)
@@ -606,6 +668,7 @@ def main() -> NoReturn | None:
 
             _ensure_minimal_manifest(manifest_path, run_id=run_id, base=base, log_path=log_path, success=result.success)
             _print_manifest_and_log_summary(manifest_path, log_path)
+            _append_history(output_dir, run_id=run_id, task=base, manifest_path=manifest_path, success=result.success, source_file=Path(args.file))
             if result.error and not result.success:
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)
@@ -636,6 +699,7 @@ def main() -> NoReturn | None:
 
             _ensure_minimal_manifest(manifest_path, run_id=run_id, base=base, log_path=log_path, success=result.success)
             _print_manifest_and_log_summary(manifest_path, log_path)
+            _append_history(output_dir, run_id=run_id, task=base, manifest_path=manifest_path, success=result.success, code=code)
             if result.error and not result.success:
                 print(result.error, file=sys.stderr)
             sys.exit(0 if result.success else 1)
