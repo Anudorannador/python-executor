@@ -23,6 +23,7 @@ from .skill import (
     generate_skill_files,
     # Expose for CLI --print mode
     _generate_skill_md,
+    _generate_inspect_skill_md,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     # Skill generation
     "generate_skill_files",
     "_generate_skill_md",
+    "_generate_inspect_skill_md",
 ]

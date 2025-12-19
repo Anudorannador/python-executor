@@ -29,6 +29,7 @@ def generate_skill_files(
     output_dir: str | Path,
     show_progress: bool = False,
     force: bool = False,
+    skill: str = "pyx",
 ) -> GenerateSkillResult:
     """Generate Claude skill files for pyx.
     
@@ -51,6 +52,15 @@ def generate_skill_files(
     output_path = Path(output_dir)
     refs_path = output_path / "references"
     backup_dir: str | None = None
+
+    skill_normalized = (skill or "pyx").strip().lower()
+    if skill_normalized not in {"pyx", "inspect"}:
+        return GenerateSkillResult(
+            success=False,
+            skill_dir=str(output_path.resolve()) if output_path else None,
+            files_created=[],
+            error=f"Unsupported skill: {skill_normalized}. Supported: pyx, inspect",
+        )
     
     # Backup existing directory if it exists (unless force)
     if output_path.exists() and not force:
@@ -68,7 +78,10 @@ def generate_skill_files(
     # ==========================================================================
     # 1. SKILL.md (core, concise)
     # ==========================================================================
-    skill_md = _generate_skill_md(info)
+    if skill_normalized == "inspect":
+        skill_md = _generate_inspect_skill_md(info)
+    else:
+        skill_md = _generate_skill_md(info)
     skill_path = output_path / "SKILL.md"
     _write_with_backup(skill_path, skill_md, force=force)
     files_created.append(str(skill_path.resolve()))
@@ -83,27 +96,47 @@ def generate_skill_files(
     
     # ==========================================================================
     # 3. references/learn-skill.md (skill extraction workflow)
+    #    (pyx skill only)
     # ==========================================================================
-    learn_md = _generate_learn_skill_md()
-    learn_path = refs_path / "learn-skill.md"
-    _write_with_backup(learn_path, learn_md, force=force)
-    files_created.append(str(learn_path.resolve()))
+    if skill_normalized == "pyx":
+        learn_md = _generate_learn_skill_md()
+        learn_path = refs_path / "learn-skill.md"
+        _write_with_backup(learn_path, learn_md, force=force)
+        files_created.append(str(learn_path.resolve()))
     
     # ==========================================================================
     # 4. references/commands.md (CLI help)
+    #    (pyx skill only)
     # ==========================================================================
-    commands_md = _generate_commands_md(info)
-    commands_path = refs_path / "commands.md"
-    _write_with_backup(commands_path, commands_md, force=force)
-    files_created.append(str(commands_path.resolve()))
+    if skill_normalized == "pyx":
+        commands_md = _generate_commands_md(info)
+        commands_path = refs_path / "commands.md"
+        _write_with_backup(commands_path, commands_md, force=force)
+        files_created.append(str(commands_path.resolve()))
     
     # ==========================================================================
     # 5. references/environment.md (environment + packages)
+    #    (pyx skill only)
     # ==========================================================================
-    env_md = _generate_environment_md(info)
-    env_path = refs_path / "environment.md"
-    _write_with_backup(env_path, env_md, force=force)
-    files_created.append(str(env_path.resolve()))
+    if skill_normalized == "pyx":
+        env_md = _generate_environment_md(info)
+        env_path = refs_path / "environment.md"
+        _write_with_backup(env_path, env_md, force=force)
+        files_created.append(str(env_path.resolve()))
+
+    # ==========================================================================
+    # 6. inspect-only references
+    # ==========================================================================
+    if skill_normalized == "inspect":
+        inspect_log_md = _generate_inspect_log_template_md()
+        inspect_log_path = refs_path / "investigation-log-template.md"
+        _write_with_backup(inspect_log_path, inspect_log_md, force=force)
+        files_created.append(str(inspect_log_path.resolve()))
+
+        verification_md = _generate_code_verification_md()
+        verification_path = refs_path / "code-verification.md"
+        _write_with_backup(verification_path, verification_md, force=force)
+        files_created.append(str(verification_path.resolve()))
     
     return GenerateSkillResult(
         success=True,
@@ -279,6 +312,44 @@ def _generate_manifest_io_md(info: "EnvironmentInfo") -> str:
     lines.append("2. **Output**: Write to files (manifest + data files)")
     lines.append("3. **Stdout**: Short summary only (paths + sizes + tiny preview)")
     lines.append("4. **Size Check**: Before reading output into LLM context, check size first")
+    lines.append("")
+
+    # Network access protocol
+    lines.append("## Network Access (Web)")
+    lines.append("")
+    lines.append("**Rule: If you need the network, still use MANIFEST_IO. Do not directly fetch inside the chat.**")
+    lines.append("")
+    lines.append("Why:")
+    lines.append("- Many websites block scraping and require a local toolchain (browser, proxy, retries).")
+    lines.append("- MANIFEST_IO keeps evidence as files (script + input + logs + outputs).")
+    lines.append("")
+    lines.append("Proxy (uv/HTTP) environment variables to check first:")
+    lines.append("- `PYX_UV_HTTP_PROXY`")
+    lines.append("- `PYX_UV_HTTPS_PROXY`")
+    lines.append("- `PYX_UV_NO_PROXY`")
+    lines.append("")
+    lines.append("If web access fails:")
+    lines.append("- **STOP** and ask the user what to do next: set/update proxy, or choose an alternative source.")
+    lines.append("- Do not keep trying different approaches silently.")
+    lines.append("")
+
+    # Resource connection protocol
+    lines.append("## Resource Connections (Databases, Brokers, SSH)")
+    lines.append("")
+    lines.append("**Rule: Never guess connection details. List candidate env vars and ask the user which one to use.**")
+    lines.append("")
+    lines.append("Common examples (project-dependent):")
+    lines.append("- Redis: `REDIS_URL`")
+    lines.append("- MySQL: `MYSQL_URL`")
+    lines.append("- Postgres: `POSTGRES_URL`, `DATABASE_URL`")
+    lines.append("- Kafka: `KAFKA_BROKERS`, `KAFKA_BOOTSTRAP_SERVERS`")
+    lines.append("- RabbitMQ: `AMQP_URL`, `RABBITMQ_URL`")
+    lines.append("- SSH: `SSH_HOST`, `SSH_PORT`, `SSH_USER`, `SSH_PRIVATE_KEY_PATH`")
+    lines.append("")
+    lines.append("Before connecting:")
+    lines.append("1. Show the env var names you intend to use.")
+    lines.append("2. Ask the user to confirm which env var(s) and which environment/cluster.")
+    lines.append("3. Only then proceed via a MANIFEST_IO script that writes logs + outputs.")
     lines.append("")
     
     # Trigger
@@ -502,6 +573,183 @@ def _generate_manifest_io_md(info: "EnvironmentInfo") -> str:
     lines.append("```")
     lines.append("")
     
+    return "\n".join(lines)
+
+
+def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
+    """Generate SKILL.md for the inspect skill."""
+    lines: list[str] = []
+
+    lines.append("---")
+    lines.append("name: inspect")
+    lines.append('description: "Structured investigation with a persistent markdown log and evidence-first execution. Use when: investigating a user question, auditing behavior, verifying dependencies, or using MCP tools. Triggers: inspect, investigate, analyze, audit, verify, deepwiki. Default mode: MANIFEST_IO."')
+    lines.append("version: 0.1.0")
+    lines.append("---")
+    lines.append("")
+
+    lines.append("# Inspect")
+    lines.append("")
+    lines.append("Run investigations in a reproducible, evidence-first way.")
+    lines.append("**Default and required: MANIFEST_IO mode.**")
+    lines.append("All investigation artifacts must be written to files.")
+    lines.append("")
+
+    lines.append("## Current Environment")
+    lines.append("")
+    lines.append(f"- **OS**: {info.os_name} ({info.os_arch})")
+    lines.append(f"- **Shell**: {info.shell_type}")
+    lines.append(f"- **Python**: {info.python_version}")
+    lines.append(f"- **pyx version**: {info.pyx_version}")
+    lines.append("")
+
+    lines.append("## Investigation Log (Mandatory)")
+    lines.append("")
+    lines.append("When the user asks a question, create a dedicated markdown log file.")
+    lines.append("You must call `pyx ensure-temp --dir \"temp\"` first.")
+    lines.append("")
+    lines.append("**Naming:** `temp/<topic>.<run_id>.inspect.md`")
+    lines.append("- `<topic>`: short, lowercase, use `-` as separator (e.g. `redis-timeout`)")
+    lines.append("- `<run_id>`: reuse the pyx run id when possible")
+    lines.append("")
+    lines.append("The log must be written in English and must include:")
+    lines.append("- The user question (verbatim)")
+    lines.append("- The LLM understanding (assumptions + constraints)")
+    lines.append("- The investigation steps (what you did and why)")
+    lines.append("- Evidence (paths to manifests/logs/outputs)")
+    lines.append("- Final answer")
+    lines.append("- Open questions / next actions")
+    lines.append("")
+
+    lines.append("## MANIFEST_IO (Required)")
+    lines.append("")
+    lines.append("If you need to look up or compute anything (files, data, web, dependency info):")
+    lines.append("1. Create a task script in `temp/`.")
+    lines.append("2. Read input from a JSON file.")
+    lines.append("3. Write outputs to files and index them in a manifest.")
+    lines.append("4. Print a short summary only (paths + sizes).")
+    lines.append("")
+    lines.append("See: [MANIFEST_IO Details](references/manifest-io.md)")
+    lines.append("")
+
+    lines.append("## MCP Tools (Only If Requested)")
+    lines.append("")
+    lines.append("If the user explicitly requests MCP tools (e.g. DeepWiki):")
+    lines.append("1. **Check available MCPs** in the current environment.")
+    lines.append("2. Confirm with the user which MCP you will use.")
+    lines.append("3. Record the MCP name, query, and results (or output file paths) in the investigation log.")
+    lines.append("")
+    lines.append("If the requested MCP is not available, stop and ask the user how to proceed.")
+    lines.append("")
+
+    lines.append("## Code Verification")
+    lines.append("")
+    lines.append("When the user asks to verify against the *actual code* in the current environment:")
+    lines.append("- Treat it as a **code verification** task, not a best-guess answer.")
+    lines.append("- Use MANIFEST_IO scripts to collect evidence and include paths/sizes in the log.")
+    lines.append("- Prefer lockfiles and installed artifacts over assumptions.")
+    lines.append("")
+    lines.append("Typical targets:")
+    lines.append("- Python venv: `.venv/`, `site-packages/`, `pip list`, `pip show <pkg>`")
+    lines.append("- Node.js: `package.json`, lockfile, `node_modules/`")
+    lines.append("- Rust/Cargo: `Cargo.toml`, `Cargo.lock`, `target/`")
+    lines.append("")
+    lines.append("See: [Code Verification](references/code-verification.md)")
+    lines.append("")
+
+    lines.append("## Rules (Strict)")
+    lines.append("")
+    lines.append("- **English only** in outputs and logs.")
+    lines.append("- **No direct network fetch in chat.** Use MANIFEST_IO and check proxy env vars first.")
+    lines.append("- **No guessing resource connections.** List env vars and ask user to confirm.")
+    lines.append("")
+
+    lines.append("## References")
+    lines.append("")
+    lines.append("- [MANIFEST_IO Details](references/manifest-io.md)")
+    lines.append("- [Investigation Log Template](references/investigation-log-template.md)")
+    lines.append("- [Code Verification](references/code-verification.md)")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _generate_inspect_log_template_md() -> str:
+    lines: list[str] = []
+    lines.append("# Investigation Log Template")
+    lines.append("")
+    lines.append("Use this template for `temp/<topic>.<run_id>.inspect.md`.")
+    lines.append("")
+    lines.append("## User Question")
+    lines.append("")
+    lines.append("(Paste the user question verbatim.)")
+    lines.append("")
+    lines.append("## Understanding")
+    lines.append("")
+    lines.append("- What the user is asking")
+    lines.append("- Constraints (English-only, MANIFEST_IO, no guessing, etc.)")
+    lines.append("- Assumptions (explicit)")
+    lines.append("")
+    lines.append("## Plan")
+    lines.append("")
+    lines.append("(Short numbered steps.)")
+    lines.append("")
+    lines.append("## Evidence")
+    lines.append("")
+    lines.append("List artifacts produced during investigation:")
+    lines.append("- Manifests: `temp/<task>.<run_id>.manifest.json`")
+    lines.append("- Logs: `temp/<task>.<run_id>.log.txt`")
+    lines.append("- Output files: `temp/<task>.<run_id>.*`")
+    lines.append("")
+    lines.append("## Findings")
+    lines.append("")
+    lines.append("(Bullet points backed by evidence.)")
+    lines.append("")
+    lines.append("## Answer")
+    lines.append("")
+    lines.append("(Final answer to the user.)")
+    lines.append("")
+    lines.append("## Open Questions / Next Actions")
+    lines.append("")
+    lines.append("(What you need from the user, or what to do next.)")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _generate_code_verification_md() -> str:
+    lines: list[str] = []
+    lines.append("# Code Verification")
+    lines.append("")
+    lines.append("Code verification means validating an answer against the *actual* code and installed artifacts in the current environment.")
+    lines.append("This must be evidence-based and reproducible.")
+    lines.append("")
+    lines.append("## Principles")
+    lines.append("")
+    lines.append("- Use MANIFEST_IO scripts to collect evidence.")
+    lines.append("- Prefer lockfiles and installed outputs over assumptions.")
+    lines.append("- Record paths/sizes of artifacts in the investigation log.")
+    lines.append("")
+    lines.append("## Common Targets")
+    lines.append("")
+    lines.append("### Python")
+    lines.append("- `.venv/` existence and interpreter path")
+    lines.append("- Installed packages: `pip list`, `pip show <pkg>`")
+    lines.append("- Import resolution: `python -c \"import pkg; print(pkg.__file__)\"`")
+    lines.append("")
+    lines.append("### Node.js")
+    lines.append("- `package.json` + lockfile (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`)")
+    lines.append("- Installed modules: `node_modules/` (and `npm ls` if needed)")
+    lines.append("")
+    lines.append("### Rust/Cargo")
+    lines.append("- `Cargo.toml` + `Cargo.lock`")
+    lines.append("- Build artifacts: `target/` (if present)")
+    lines.append("")
+    lines.append("## Output")
+    lines.append("")
+    lines.append("Always produce:")
+    lines.append("- a manifest file listing evidence outputs")
+    lines.append("- a short stdout summary")
+    lines.append("- and record everything in the investigation log")
+    lines.append("")
     return "\n".join(lines)
 
 

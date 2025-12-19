@@ -54,6 +54,7 @@ from pyx_core import (  # noqa: E402
     generate_skill_files,
     save_with_backup,
     _generate_skill_md,
+    _generate_inspect_skill_md,
 )
 
 console = Console()
@@ -482,6 +483,13 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     )
     skill_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
     skill_parser.add_argument("--print", dest="print_only", action="store_true", help="Print SKILL.md to stdout instead of saving")
+    skill_parser.add_argument(
+        "--skill",
+        type=str,
+        choices=["pyx", "inspect"],
+        default="pyx",
+        help="Which skill template to generate (default: pyx).",
+    )
 
     return parser, gen_parser
 
@@ -834,12 +842,16 @@ def main() -> NoReturn | None:
         sys.exit(0)
     elif args.command in ("generate-skill", "gs"):
         output_dir = Path(args.output_dir)
+        selected_skill = getattr(args, "skill", "pyx")
         
         # Print only mode - just generate SKILL.md content
         if args.print_only:
             console.print("[bold blue]Collecting environment information...[/bold blue]", file=sys.stderr)
             info = get_environment_info(show_progress=True)
-            skill_md = _generate_skill_md(info)
+            if selected_skill == "inspect":
+                skill_md = _generate_inspect_skill_md(info)
+            else:
+                skill_md = _generate_skill_md(info)
             
             reconfigure = getattr(sys.stdout, "reconfigure", None)
             if callable(reconfigure):
@@ -854,6 +866,7 @@ def main() -> NoReturn | None:
                 output_dir=output_dir,
                 show_progress=True,
                 force=args.force,
+                skill=selected_skill,
             )
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")

@@ -50,6 +50,7 @@ from .generator import (
     generate_skill_files,
     save_with_backup,
     _generate_skill_md,
+    _generate_inspect_skill_md,
 )
 
 __all__ = [
@@ -78,6 +79,7 @@ __all__ = [
     "generate_skill_files",
     "save_with_backup",
     "_generate_skill_md",
+    "_generate_inspect_skill_md",
     # Constants
     "DEFAULT_TIMEOUT",
     "COMMON_COMMANDS",
