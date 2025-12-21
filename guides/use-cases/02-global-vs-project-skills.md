@@ -118,6 +118,14 @@ Because your data access is via TCP forwarding:
 - Treat ports as inputs (env vars or input JSON)
 - Always run “fingerprint” checks first
 
+If your org uses URL-style env vars, keep them generic and parameterized:
+
+- `MYSQL_<ENV>_URL` (or `DB_<ENV>_URL`)
+- `REDIS_<ENV>_URL`
+- `KAFKA_<ENV>_BROKERS`
+
+Avoid embedding project prefixes (e.g. do not hardcode `ABC_MYSQL_URL` in a global skill).
+
 ### 5) Remove non-transferable org details
 
 Global skills should not embed:

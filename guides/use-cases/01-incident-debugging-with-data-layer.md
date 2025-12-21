@@ -56,11 +56,23 @@ Because your data layer is accessed via local TCP forwards, treat the following 
 
 Recommended (generic) env vars:
 
+You can use either explicit host/port variables or URL-style variables.
+
+Host/port style (generic):
+
 - `DB_HOST=127.0.0.1`
 - `DB_PORT=<port>`
 - `REDIS_HOST=127.0.0.1`
 - `REDIS_PORT=<port>`
 - `KAFKA_BROKERS=127.0.0.1:<port>` (or a comma-separated list)
+
+URL style (common in internal tooling; recommended when you already standardize on it):
+
+- `MYSQL_<ENV>_URL=mysql://user:pass@127.0.0.1:<port>/<db>`
+- `REDIS_<ENV>_URL=redis://:pass@127.0.0.1:<port>/<db>`
+- `KAFKA_<ENV>_BROKERS=127.0.0.1:<port>`
+
+Where `<ENV>` is something like `DEV`, `STAGING`, `PROD`.
 
 Do not write secrets to disk. Read them from env.
 
