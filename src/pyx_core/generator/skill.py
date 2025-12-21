@@ -21,6 +21,11 @@ from typing import TYPE_CHECKING, Literal
 
 from ..shell_syntax import SYNTAX_PATTERN_ORDER
 from .common import GenerateSkillResult
+from .summary import (
+    build_summary_skill_md,
+    build_leader_summary_template_md,
+    build_markdown_images_md,
+)
 
 if TYPE_CHECKING:
     from ..environment import EnvironmentInfo
@@ -56,20 +61,20 @@ def generate_skill_files(
     backup_dir: str | None = None
 
     skill_normalized = (skill or "pyx").strip().lower()
-    if skill_normalized not in {"pyx", "inspect"}:
+    if skill_normalized not in {"pyx", "inspect", "summary"}:
         return GenerateSkillResult(
             success=False,
             skill_dir=str(output_path.resolve()) if output_path else None,
             files_created=[],
-            error=f"Unsupported skill: {skill_normalized}. Supported: pyx, inspect",
+            error=f"Unsupported skill: {skill_normalized}. Supported: pyx, inspect, summary",
         )
     
     # Backup existing directory if it exists (unless force)
     if output_path.exists() and not force:
         backup_dir = _backup_directory(output_path)
     
-    # Collect environment info
-    info = get_environment_info(show_progress=show_progress)
+    # Collect environment info (summary skill doesn't need it)
+    info = get_environment_info(show_progress=show_progress) if skill_normalized in {"pyx", "inspect"} else None
     
     files_created: list[str] = []
     
@@ -80,7 +85,9 @@ def generate_skill_files(
     # ==========================================================================
     # 1. SKILL.md (core, concise)
     # ==========================================================================
-    if skill_normalized == "inspect":
+    if skill_normalized == "summary":
+        skill_md = build_summary_skill_md()
+    elif skill_normalized == "inspect":
         skill_md = _generate_inspect_skill_md(info)
     else:
         skill_md = _generate_skill_md(info)
@@ -89,12 +96,22 @@ def generate_skill_files(
     files_created.append(str(skill_path.resolve()))
     
     # ==========================================================================
-    # 2. references/manifest-io.md (MANIFEST_IO universal workflow)
+    # 2. references
     # ==========================================================================
-    strict_md = _generate_manifest_io_md(info)
-    strict_path = refs_path / "manifest-io.md"
-    _write_with_backup(strict_path, strict_md, force=force)
-    files_created.append(str(strict_path.resolve()))
+    if skill_normalized == "summary":
+        template_path = refs_path / "leader-summary-template.md"
+        _write_with_backup(template_path, build_leader_summary_template_md(), force=force)
+        files_created.append(str(template_path.resolve()))
+
+        images_path = refs_path / "markdown-images.md"
+        _write_with_backup(images_path, build_markdown_images_md(), force=force)
+        files_created.append(str(images_path.resolve()))
+    else:
+        # references/manifest-io.md (MANIFEST_IO universal workflow)
+        strict_md = _generate_manifest_io_md(info)
+        strict_path = refs_path / "manifest-io.md"
+        _write_with_backup(strict_path, strict_md, force=force)
+        files_created.append(str(strict_path.resolve()))
     
     # ==========================================================================
     # 3. references/learn-skill.md (skill extraction workflow)

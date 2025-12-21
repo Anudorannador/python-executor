@@ -1,74 +1,15 @@
-"""Leader-summary template generation.
+"""Leader-summary skill content.
 
-Creates a small set of markdown templates intended for producing
+This module provides small, reusable markdown templates intended for
 leader-friendly status updates.
 
-This is intentionally kept independent from the Claude skill generators so it
-can be invoked directly via `pyx summary`.
+The actual summary text is written by an LLM guided by the generated skill.
 """
 
 from __future__ import annotations
 
-import shutil
-from pathlib import Path
 
-from .common import GenerateSummaryResult
-
-
-def generate_summary_files(
-    output_dir: str | Path,
-    *,
-    force: bool = False,
-) -> GenerateSummaryResult:
-    output_path = Path(output_dir)
-    refs_path = output_path / "references"
-
-    backup_dir: str | None = None
-    if output_path.exists() and not force:
-        backup_dir = _backup_directory(output_path)
-
-    output_path.mkdir(parents=True, exist_ok=True)
-    refs_path.mkdir(parents=True, exist_ok=True)
-
-    files_created: list[str] = []
-
-    skill_path = output_path / "SKILL.md"
-    skill_path.write_text(_build_skill_md(), encoding="utf-8")
-    files_created.append(str(skill_path.resolve()))
-
-    template_path = refs_path / "leader-summary-template.md"
-    template_path.write_text(_build_leader_summary_template_md(), encoding="utf-8")
-    files_created.append(str(template_path.resolve()))
-
-    images_path = refs_path / "markdown-images.md"
-    images_path.write_text(_build_markdown_images_md(), encoding="utf-8")
-    files_created.append(str(images_path.resolve()))
-
-    return GenerateSummaryResult(
-        success=True,
-        output_dir=str(output_path.resolve()),
-        files_created=files_created,
-        backup_dir=backup_dir,
-    )
-
-
-def _backup_directory(path: Path) -> str | None:
-    """Backup entire directory to path.bak or path.bak.N."""
-    if not path.exists():
-        return None
-
-    backup_path = Path(f"{path}.bak")
-    if backup_path.exists():
-        i = 1
-        while Path(f"{path}.bak.{i}").exists():
-            i += 1
-        backup_path = Path(f"{path}.bak.{i}")
-
-    shutil.move(str(path), str(backup_path))
-    return str(backup_path)
-
-
-def _build_skill_md() -> str:
+def build_summary_skill_md() -> str:
     lines: list[str] = []
 
     lines.append("---")
@@ -107,7 +48,7 @@ def _build_skill_md() -> str:
     return "\n".join(lines)
 
 
-def _build_leader_summary_template_md() -> str:
+def build_leader_summary_template_md() -> str:
     lines: list[str] = []
 
     lines.append("# Leader Summary")
@@ -169,7 +110,7 @@ def _build_leader_summary_template_md() -> str:
     return "\n".join(lines)
 
 
-def _build_markdown_images_md() -> str:
+def build_markdown_images_md() -> str:
     lines: list[str] = []
 
     lines.append("# Markdown Images")

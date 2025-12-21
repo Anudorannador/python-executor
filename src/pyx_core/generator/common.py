@@ -49,17 +49,6 @@ class GenerateSkillResult:
     backup_dir: str | None = None
 
 
-@dataclass
-class GenerateSummaryResult:
-    """Result of generating leader-summary templates."""
-
-    success: bool
-    output_dir: str | None
-    files_created: list[str]
-    error: str | None = None
-    backup_dir: str | None = None
-
-
 def save_with_backup(content: str, output_path: str | Path, force: bool = False) -> tuple[bool, str | None, str | None]:
     """Save content to file with backup handling.
     
