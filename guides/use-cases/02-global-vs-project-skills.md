@@ -1,172 +1,160 @@
 # Use Case 2: Project Skills vs Global Skills (Reusable Templates Without Project Leakage)
 
-This guide describes a common need:
+This guide is **prompt-first**: it focuses on how to instruct an LLM to generate two kinds of reusable knowledge from the same incident work:
 
-- You want **project-specific** skills that deeply understand one internal system (naming, domains, data model, service boundaries).
-- You also want **global** skills that are portable and reusable across projects.
-- When extracting a learnable workflow from a project, you do **not** want to carry project-specific prefixes (for example, an `abc_` prefix) into the global template.
+- **Project skills**: deep understanding of one codebase (names, tables, topics, domain semantics).
+- **Global skills**: portable templates that do not leak project-specific prefixes (e.g., `abc_`).
 
-`python-executor (pyx)` is designed to support this split:
+`python-executor (pyx)` supports this well because it:
 
-- It generates skills as **file packages** (`SKILL.md` + `references/`).
-- It keeps “run evidence” as **MANIFEST_IO artifacts**.
-- It can regenerate skills consistently (so you can keep the global and project layers aligned).
+- produces reproducible evidence via MANIFEST_IO runs
+- generates skills as file packages (`SKILL.md` + `references/`)
 
-## The Two Layers
+## Copy/Paste Prompt Template (Two-Layer Learn Output)
 
-### Layer A: Project skills (repo-scoped)
+Paste this after an incident investigation is complete.
+
+```text
+You are my learning and documentation assistant.
+
+Goal: produce two outputs from the incident evidence.
+
+Hard requirements:
+- Do not invent facts. Use only evidence from MANIFEST_IO outputs and the investigation log.
+- Produce two deliverables:
+  1) Project learn (repo-scoped): may include project-specific names.
+  2) Global learn (portable template): MUST NOT include project-specific prefixes, service names, internal URLs, or proprietary repo layout.
+
+Inputs you can use:
+- temp/<topic>.<run_id>.inspect.md
+- manifests/logs/outputs referenced in that log
+
+Global de-projecting policy:
+- Replace any project prefix like "abc_" with <PROJECT_PREFIX>_.
+- Replace service/module names with <SERVICE> / <MODULE>.
+- Replace table names with <TABLE_...>.
+- Replace topic names with <TOPIC_...>.
+- Convert concrete queries into templates with placeholders.
+- Keep environment access generic: localhost tunnels + env vars.
+
+Output format:
+- For project learn: list concrete checklists, entrypoints, tables/topics/key patterns.
+- For global learn: produce a reusable playbook + template checklists + placeholder mapping table.
+
+Start by asking me for:
+- The project prefix (e.g. "abc")
+- Which parts should remain project-only vs globally reusable
+```
+
+## How to Store Each Layer
+
+### Project skills (repo-scoped)
 
 Use project skills to capture:
 
-- domain terms, service/module names, project-specific naming conventions
+- domain terms and naming conventions
 - exact tables/topics/cache key patterns
-- “how this system works” mental models
-- operational constraints unique to the system
+- code entrypoints and module boundaries
+- invariants unique to the system
 
-Recommended storage:
+Recommended:
 
-- Commit to the repo under `skills/` (public-safe)
+- Commit public-safe skills to the repo under `skills/`.
 
-Example:
-
-- `skills/pyx/`
-- `skills/inspect/`
-- `skills/manifest/`
-- `skills/learn/`
-- `skills/summary/`
-
-### Layer B: Global skills (user-scoped)
+### Global skills (user-scoped)
 
 Use global skills to capture:
 
-- reusable workflows and templates
-- generic investigation playbooks (DB/Redis/Kafka)
+- investigation playbooks (DB/Redis/Kafka)
 - artifact conventions (inputs/outputs/manifests)
-- postmortem structures and checklists
+- postmortem templates
+- generic checklists and placeholder-driven templates
 
-Recommended storage:
+Recommended:
 
-- Your user-level Claude skills folder
-  - Windows: `%USERPROFILE%\.claude\skills`
+- Store in your user-level Claude skills folder:
+  - Windows: `%USERPROFILE%\\.claude\\skills`
   - Linux/macOS: `$HOME/.claude/skills`
 
-## How to Generate Skills for Global Use
+## Copy/Paste Commands (Generate Skills)
 
-If you want a rich, machine-specific snapshot (for example, when you want local environment details embedded):
+Global skills install (machine-specific; local):
 
 - Windows (cmd)
-  - `pyx gs --skill all --privacy local -o "%USERPROFILE%\.claude\skills"`
+  - `pyx gs --skill all --privacy local -o "%USERPROFILE%\\.claude\\skills"`
 - Windows (PowerShell)
-  - `pyx gs --skill all --privacy local -o "$env:USERPROFILE\.claude\skills"`
+  - `pyx gs --skill all --privacy local -o "$env:USERPROFILE\\.claude\\skills"`
 - Linux/macOS
   - `pyx gs --skill all --privacy local -o "$HOME/.claude/skills"`
 
-If you want public-safe output suitable for committing to a repo:
+Repo skills (public-safe; commit to repo):
 
 - `pyx gs --skill all --privacy public -o skills`
 
-## The Core Problem: Avoiding Project Leakage
+## De-Projecting Policy (Global Skills)
 
-When you learn from a project incident, you will naturally encounter:
-
-- project prefixes (e.g. `abc_*`)
-- internal service names and repo structure
-- internal URLs, dashboards, ownership lists
-
-These are valuable in project skills but harmful in global skills.
-
-The solution is to enforce a “de-projecting” policy when writing global skills.
-
-## A Practical De-Projecting Policy (Global Skills)
+This policy is the most important part. If the global skill violates this, it is not reusable.
 
 ### 1) Replace identifiers with placeholders
 
-In global skills:
-
-- Replace project prefix `abc_` with `<PROJECT_PREFIX>_`
-- Replace service names with `<SERVICE>`
-- Replace topic names with `<TOPIC_...>`
-- Replace table names with `<TABLE_...>`
-
-Examples:
-
-- `abc_orders` → `<PROJECT_PREFIX>_orders`
-- `abc.order.created.v1` → `<TOPIC_ORDER_CREATED>`
-- `orders_v2` → `<TABLE_ORDERS>`
+- `abc_*` → `<PROJECT_PREFIX>_*`
+- service names → `<SERVICE>`
+- module names → `<MODULE>`
+- tables → `<TABLE_...>`
+- Kafka topics → `<TOPIC_...>`
+- Redis keys → `<KEY_PATTERN_...>`
 
 ### 2) Preserve rules, not values
 
-Do not encode “the table is named X”.
-Encode “the system uses a stable naming rule”:
+Do not encode:
 
-- “Topics are named `<PROJECT_PREFIX>.<domain>.<event>.v<version>`.”
-- “Redis keys include `<PROJECT_PREFIX>:<domain>:<entity_id>`.”
+- “the topic is named `abc.order.created.v1`”
 
-### 3) Convert concrete queries into query templates
+Encode:
 
-Keep the structure but parameterize values:
+- “topics are named `<PROJECT_PREFIX>.<domain>.<event>.v<version>`”
+
+### 3) Convert concrete queries into templates
+
+Keep the structure, parameterize the values:
 
 - `WHERE user_id = <USER_ID>`
 - `AND ts BETWEEN <START_TS> AND <END_TS>`
-- `AND env = <ENV>`
 
-### 4) Keep environment access generic
+### 4) Keep environment access generic (localhost tunnels)
 
-Because your data access is via TCP forwarding:
+Because access is via TCP forwarding:
 
-- Always use `localhost` / `127.0.0.1`
-- Treat ports as inputs (env vars or input JSON)
-- Always run “fingerprint” checks first
+- always use localhost/127.0.0.1
+- treat ports/URLs as inputs (env vars or input JSON)
+- always run fingerprint checks first
 
-If your org uses URL-style env vars, keep them generic and parameterized:
+Common URL-style env vars (generic):
 
 - `MYSQL_<ENV>_URL` (or `DB_<ENV>_URL`)
 - `REDIS_<ENV>_URL`
 - `KAFKA_<ENV>_BROKERS`
 
-Avoid embedding project prefixes (e.g. do not hardcode `ABC_MYSQL_URL` in a global skill).
+Avoid embedding project prefixes in env var names in global skills (do not hardcode `ABC_MYSQL_URL`).
 
 ### 5) Remove non-transferable org details
 
 Global skills should not embed:
 
-- internal URLs or dashboards
-- internal ticket systems
-- specific team names or on-call rotations
-- proprietary repo layout details
+- internal dashboards/URLs
+- internal ticketing system details
+- team/oncall specifics
 
-Instead, encode the requirement:
+Instead, encode requirements:
 
 - “Link to the relevant dashboard.”
-- “Record the ticket/incident ID.”
+- “Record the incident ID.”
 
-## Recommended Workflow: Produce Both Outputs
+## Acceptance Checklist (Global Skill)
 
-After an incident:
+A global skill is acceptable only if:
 
-1. Write the project-specific learn artifact (project skill update)
-2. Write a global template learn artifact (de-projected)
-
-You can treat it as “two deliverables from the same evidence”.
-
-## What to Put in Each Layer (Quick Checklist)
-
-Project skills:
-
-- entrypoints and module names
-- data dictionary (tables/columns)
-- canonical topics and message schemas
-- business-specific invariants
-
-Global skills:
-
-- incident checklist (fingerprint → DB → Redis → Kafka)
-- artifact naming conventions for MANIFEST_IO
-- diff-first outputs (expected vs actual)
-- postmortem template (impact/root cause/prevention)
-
-## Why this pairing works
-
-- Project skills speed up work inside the same codebase.
-- Global skills provide safe templates you can reuse anywhere.
-- MANIFEST_IO evidence makes both layers credible and easy to maintain.
+- it contains zero project identifiers (prefixes, service names, repo paths)
+- it includes a placeholder mapping table
+- it includes a reusable investigation playbook (fingerprint → DB → Redis → Kafka)
+- it is written so a new project can “fill in blanks” and reuse the template

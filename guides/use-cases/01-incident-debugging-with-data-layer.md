@@ -1,174 +1,155 @@
 # Use Case 1: Incident Debugging With Data-Layer Access (DB/Redis/Kafka)
 
-This guide describes a common workflow:
+This guide is **prompt-first**: it focuses on how to instruct an LLM to use `python-executor (pyx)` correctly when:
 
-- A teammate reports a bug or incorrect data in an internal system.
-- You need to investigate by connecting to the data layer (database, Redis, Kafka, etc.).
-- Your environment uses TCP forwarding, so all connections are `localhost:<port>`.
-- You must produce (a) a clear explanation for the teammate and your leader and (b) durable evidence and reusable knowledge so the next investigation is faster.
+- A teammate reports a bug or incorrect data.
+- You need to investigate by connecting to the data layer (database, Redis, Kafka).
+- Your access is via TCP forwarding, so everything is `localhost:<port>`.
+- You must produce (a) an answer for the teammate + a leader-ready write-up and (b) reusable “learn” outputs so the next incident is faster.
 
-This is a great match for `python-executor (pyx)` because it turns an investigation into **reproducible artifacts**.
+## What “Good” Looks Like (Deliverables)
 
-## Goals
+When done, you should have:
 
-- **Reproduce** the issue and bound the impact.
-- **Prove** conclusions with a file-based evidence trail.
-- **Fix** the issue (or mitigate) safely.
-- **Communicate** clearly (teammate + leader).
-- **Learn**: extract a reusable workflow so the LLM (and you) don’t restart from scratch next time.
+1) **Evidence (MANIFEST_IO artifacts)** for each major check
+- script + input JSON + manifest + log + output files
 
-## What to Generate (Three Outputs)
+2) **An investigation log**
+- `temp/<topic>.<run_id>.inspect.md` with links to evidence files
 
-### 1) Evidence (MANIFEST_IO artifacts)
+3) **Two summaries**
+- a teammate-facing explanation (what happened, workaround, next steps)
+- a leader-facing postmortem (impact, root cause, detection gap, prevention actions)
 
-For every meaningful check, run a script via `pyx run` and produce:
+4) **A learn extraction plan**
+- what becomes project-specific knowledge vs what becomes global reusable templates
 
-- a script (`temp/<task>.py`)
-- input JSON (`temp/<task>.input.json`)
-- a manifest (`temp/<task>.<run_id>.manifest.json`)
-- a log (`temp/<task>.<run_id>.log.txt`)
-- one or more output files (CSV/JSON/TXT)
+## Copy/Paste Prompt Template (Incident Investigation)
 
-This makes your investigation reproducible and reviewable.
+Paste this into your LLM chat at the start of an investigation.
 
-### 2) Investigation log (inspect)
+```text
+You are my incident investigation assistant.
 
-Create a single narrative file for the incident:
+Hard requirements:
+- Use python-executor (pyx) and MANIFEST_IO for any computation or lookup.
+- Do NOT guess data-layer connection details.
+- My data-layer access is via TCP forwarding, so all endpoints are localhost ports.
+- Prefer file-based evidence over chat explanations: write outputs to files and reference them.
 
-- `temp/<topic>.<run_id>.inspect.md`
+Workflow:
+1) Ask me for the minimum inputs you need (environment name, entity IDs, time window).
+2) Propose an investigation plan as a checklist.
+3) For each step, create a MANIFEST_IO task:
+   - script: temp/<task>.py
+   - input:  temp/<task>.input.json
+   - outputs: write JSON/CSV/TXT files
+   - manifest + log produced via `pyx run`
+4) Maintain an investigation log:
+   - temp/<topic>.<run_id>.inspect.md
+   - include hypotheses, steps taken, and links to manifests/logs/outputs.
+5) End with two write-ups:
+   - teammate summary (short)
+   - leader postmortem (root cause + prevention actions with owners/dates)
 
-The log should link to manifests/logs/outputs for evidence.
+Connection policy:
+- Read all connection details from env vars only.
+- If multiple environments exist, list the candidate env var names and ask me to confirm which ones to use.
 
-### 3) Summary + Learn
+Start by asking me for:
+- Incident title/topic
+- Environment (e.g., PROD/STAGING)
+- Entity identifiers (user_id/order_id/etc.)
+- Time window + timezone assumption
+```
 
-- A short, leader-friendly summary (status/impact/root cause/actions).
-- A “learn” output that captures the reusable investigation workflow.
+## Inputs You Should Provide to the LLM
 
-## Recommended Workflow
+At minimum:
 
-### Step 0: Confirm the environment (TCP forward)
+- **Environment label** (e.g. `PROD`, `STAGING`)
+- **IDs** involved (user/order/payment/etc.)
+- **Time window** (start/end + timezone policy)
+- **Symptoms** (what is wrong, expected vs actual)
 
-Because your data layer is accessed via local TCP forwards, treat the following as **inputs**, not assumptions:
+Optional but high value:
 
-- Which environment is this (prod/staging)?
-- Which tunnels are active?
-- Which local ports map to which systems?
+- A screenshot or example payload
+- The code entrypoint/module you suspect
 
-Recommended (generic) env vars:
+## Data-Layer Env Vars (localhost tunnels)
 
-You can use either explicit host/port variables or URL-style variables.
+Do not hardcode secrets into files. Read from environment variables.
 
-Host/port style (generic):
-
-- `DB_HOST=127.0.0.1`
-- `DB_PORT=<port>`
-- `REDIS_HOST=127.0.0.1`
-- `REDIS_PORT=<port>`
-- `KAFKA_BROKERS=127.0.0.1:<port>` (or a comma-separated list)
-
-URL style (common in internal tooling; recommended when you already standardize on it):
+If your org standardizes on URL-style env vars, use:
 
 - `MYSQL_<ENV>_URL=mysql://user:pass@127.0.0.1:<port>/<db>`
 - `REDIS_<ENV>_URL=redis://:pass@127.0.0.1:<port>/<db>`
-- `KAFKA_<ENV>_BROKERS=127.0.0.1:<port>`
+- `KAFKA_<ENV>_BROKERS=127.0.0.1:<port>` (or comma-separated)
 
-Where `<ENV>` is something like `DEV`, `STAGING`, `PROD`.
+Where `<ENV>` is `DEV`, `STAGING`, `PROD`, etc.
 
-Do not write secrets to disk. Read them from env.
+## How to “Teach” the LLM to Avoid Common Failure Modes
 
-### Step 1: Create a topic + run id and start an inspect log
+### Require fingerprints first
 
-1. `pyx ensure-temp --dir "temp"`
-2. Create `temp/<topic>.<run_id>.inspect.md`
+In your prompt, explicitly require “fingerprint” checks to avoid wrong-environment mistakes:
 
-Use this structure:
+- DB fingerprint (db name/user/version/time)
+- Redis fingerprint (`INFO server`, keyspace summary)
+- Kafka fingerprint (cluster/broker metadata + relevant topic list)
 
-- **Problem statement** (what the teammate observed)
-- **Expected behavior**
-- **Scope** (time window, user IDs, entity IDs)
-- **Hypotheses** (what could cause it)
-- **Steps + evidence links** (each step references a manifest)
-- **Root cause**
-- **Mitigation / Fix**
-- **Prevention**
+Each fingerprint step should be its own MANIFEST_IO run with outputs written to files.
 
-### Step 2: Run “fingerprint” checks first (avoid wrong-environment mistakes)
+### Require diff-first outputs
 
-Before deep debugging, produce fingerprints that prove what you connected to.
+Tell the LLM to produce diffs, not just raw dumps:
 
-Examples (generic):
+- DB value vs cache value diff JSON
+- expected vs actual CSV
+- Kafka offsets/lag summaries
 
-- DB: current database/user/time, version
-- Redis: `INFO server` + keyspace summary
-- Kafka: cluster/broker metadata + topic list subset
+### Require explicit evidence links
 
-The output of these checks should be committed as artifacts for the incident (via MANIFEST_IO).
+In the investigation log and final summaries, require links to:
 
-### Step 3: Investigate source-of-truth first, then cache, then async
+- manifests (what ran)
+- logs (stdout/stderr)
+- output files (results)
 
-A practical ordering for “data is wrong” problems:
+## Recommended Investigation Ordering (Tell the LLM)
 
-1. **Database (source of truth)**
-   - verify the canonical record(s)
-   - check timestamps/timezone boundaries
-   - check read replica lag if applicable
-2. **Redis (cache / derived views)**
-   - confirm key existence, TTL, serialization version
-   - compare cached value vs DB value
-3. **Kafka (async pipeline)**
-   - confirm messages were produced
-   - confirm consumer group offsets and lag
-   - validate idempotency / de-dup logic if duplicates exist
+For “data is wrong” incidents, instruct:
 
-Each step is its own `pyx run` task with its own manifest.
+1) Database (source of truth)
+2) Redis (cache/derived view)
+3) Kafka (async pipeline / eventual consistency)
 
-### Step 4: Record diffs, not just raw results
+Each step should be a small, single-purpose `pyx run` task.
 
-Make the output easy to interpret by writing explicit diffs:
+## Suggested File Conventions (Make learning easy)
 
-- “DB value vs cache value” diff JSON
-- “expected vs actual” CSV
-- “message count per partition” table
+Standardize input/output file naming so later learn extraction is painless:
 
-Your teammate/leader should not need to parse raw logs.
-
-### Step 5: Produce the two summaries (teammate + leader)
-
-Use two audiences in one doc, or two short docs:
-
-- **Teammate summary**: what happened, workaround, ETA, data correction plan
-- **Leader summary**: impact, root cause, detection gap, prevention actions (owners + dates)
-
-If you already have an incident log, the summary is mostly selecting and compressing.
-
-### Step 6: Run “learn” to make it reusable
-
-After you finish:
-
-- extract a reusable investigation workflow as a `learn` output
-- keep project-specific details in the project skill
-- extract generic patterns into a global skill (see Use Case 2)
-
-## Suggested Script Conventions
-
-Even if you don’t standardize code heavily, standardize **inputs and outputs**:
-
-- Input JSON should always include:
-  - `time_window` (`start`, `end`, timezone policy)
-  - `entity_ids` (user/order/etc.)
-  - `notes` (free text)
-- Output files should have predictable names:
+- Inputs
+  - `temp/<task>.input.json` includes `time_window`, `entity_ids`, `notes`
+- Outputs
   - `fingerprint.*.json`
   - `db_rows.*.csv`
   - `redis_value.*.json`
   - `kafka_offsets.*.json`
   - `diff.*.json`
 
-This makes learn extraction and reuse much easier.
+## After the Incident: Summary + Learn
 
-## Why this works well with pyx
+In your prompt, explicitly require two outputs:
 
-- MANIFEST_IO makes investigations **auditable**.
-- `inspect` makes the narrative **repeatable**.
-- `summary` makes communication **fast**.
-- `learn` turns repeated incident work into **templates**.
+1) Teammate summary (short): what happened, workaround, ETA, data correction plan
+2) Leader postmortem: impact, root cause, detection gap, prevention actions (owners + due dates)
+
+Then require a learn handoff:
+
+- What becomes project-specific (names, tables, topics, internal semantics)
+- What becomes global template knowledge (generic workflow, checklists, placeholders)
+
+See Use Case 2 for the project-vs-global template policy.
