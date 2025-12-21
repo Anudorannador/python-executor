@@ -7,6 +7,7 @@ Start with these prompt-first use cases:
 
 - [Incident debugging with data-layer access](guides/use-cases/01-incident-debugging-with-data-layer.md)
 - [Project skills vs global skills (template without project leakage)](guides/use-cases/02-global-vs-project-skills.md)
+- [Migration baseline for a rewrite (Python → Rust, SQLite → Postgres)](guides/use-cases/03-migration-baseline-for-rewrite.md)
 
 This repo is designed around four repeatable outputs:
 
