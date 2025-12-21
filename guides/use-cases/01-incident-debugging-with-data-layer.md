@@ -1,6 +1,18 @@
 # Use Case 1: Incident Debugging With Data-Layer Access (DB/Redis/Kafka)
 
-This guide is **prompt-first**: it focuses on how to instruct an LLM to use `python-executor (pyx)` correctly when:
+## Scenario
+
+You maintain an internal system used by other teammates. When something goes wrong, you typically face situations like:
+
+- A teammate reports a bug or incorrect data produced by the system.
+- You need to debug quickly by connecting to the data layer (MySQL, Redis, Kafka).
+- Access is via TCP forwarding, so the actual connections are always `localhost:<port>`.
+- After restoring correctness, you must explain the cause to the teammate and write a leader-facing postmortem.
+- You also want to extract reusable knowledge (“learn”) so future investigations do not start from zero.
+
+## How this guide helps
+
+This guide is **prompt-first**: it shows how to instruct an LLM to use `python-executor (pyx)` correctly to produce evidence, logs, summaries, and learn outputs.
 
 - A teammate reports a bug or incorrect data.
 - You need to investigate by connecting to the data layer (database, Redis, Kafka).

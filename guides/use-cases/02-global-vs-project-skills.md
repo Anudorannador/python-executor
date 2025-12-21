@@ -1,6 +1,22 @@
 # Use Case 2: Project Skills vs Global Skills (Reusable Templates Without Project Leakage)
 
-This guide is **prompt-first**: it focuses on how to instruct an LLM to generate two kinds of reusable knowledge from the same incident work:
+## Scenario
+
+In your day-to-day work, incident debugging produces valuable knowledge:
+
+- You learn project-specific details (service names, tables, topics, cache keys, naming conventions).
+- You also learn reusable patterns (how to debug data correctness, how to build evidence, how to write postmortems).
+
+You want both outcomes:
+
+1) **Project skills** that help an LLM operate effectively in one repo.
+2) **Global skills** that are generic templates you can reuse in a brand-new project.
+
+The key constraint is avoiding “project leakage”: the global skill should not carry project-specific prefixes (e.g., `abc_`) or internal naming into future projects.
+
+## How this guide helps
+
+This guide is **prompt-first**: it shows how to instruct an LLM to produce both project learn and global learn from the same incident evidence.
 
 - **Project skills**: deep understanding of one codebase (names, tables, topics, domain semantics).
 - **Global skills**: portable templates that do not leak project-specific prefixes (e.g., `abc_`).
