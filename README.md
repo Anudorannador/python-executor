@@ -1,13 +1,12 @@
 # python-executor (pyx)
 
 `pyx` is a local, cross-platform executor for LLM/Agent workflows.
-The main value is NOT “running one-off Python”. The main value is generating **re-loadable artifacts** so new LLM sessions can reliably recover context and keep work evidence-based.
+It is built for **evidence-based debugging and repeatable prompting**: run work via MANIFEST_IO (files + manifest), keep an inspect log, and turn incident work into reusable skills.
 
-Why use it:
+Start with these prompt-first use cases:
 
-- Turns debugging/investigations into reproducible, file-based evidence (MANIFEST_IO)
-- Makes incident write-ups and postmortems faster and more consistent
-- Supports both project-specific skills and global reusable templates
+- [Incident debugging with data-layer access](guides/use-cases/01-incident-debugging-with-data-layer.md)
+- [Project skills vs global skills (template without project leakage)](guides/use-cases/02-global-vs-project-skills.md)
 
 This repo is designed around four repeatable outputs:
 
@@ -69,13 +68,6 @@ Default output: `$PYX_INSTRUCTIONS_PATH` or `./docs/pyx.instructions.md`.
 Reference: [docs/manifest/references/manifest-io.md](docs/manifest/references/manifest-io.md)
 
 ## Core Workflows
-
-## Use Cases
-
-These guides are hand-written and intentionally live outside `docs/` (which is generated output).
-
-- [Incident debugging with data-layer access](guides/use-cases/01-incident-debugging-with-data-layer.md)
-- [Project skills vs global skills (template without project leakage)](guides/use-cases/02-global-vs-project-skills.md)
 
 ### Generate skills
 
