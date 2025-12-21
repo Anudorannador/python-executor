@@ -26,6 +26,14 @@ def build_summary_skill_md() -> str:
     lines.append("Generate concise, leader-friendly status summaries.")
     lines.append("")
 
+    lines.append("## Related (Soft)")
+    lines.append("")
+    lines.append("Often used with:")
+    lines.append("")
+    lines.append("- `learn` - when extracting a reusable summary skill from history")
+    lines.append("- `manifest` - when producing evidence via file-first artifacts")
+    lines.append("")
+
     lines.append("## Output")
     lines.append("")
     lines.append("Use the template in `references/leader-summary-template.md`.")

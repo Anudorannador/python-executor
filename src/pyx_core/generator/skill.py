@@ -61,19 +61,19 @@ def generate_skill_files(
     backup_dir: str | None = None
 
     skill_normalized = (skill or "pyx").strip().lower()
-    if skill_normalized not in {"pyx", "inspect", "summary"}:
+    if skill_normalized not in {"pyx", "inspect", "summary", "manifest", "learn"}:
         return GenerateSkillResult(
             success=False,
             skill_dir=str(output_path.resolve()) if output_path else None,
             files_created=[],
-            error=f"Unsupported skill: {skill_normalized}. Supported: pyx, inspect, summary",
+            error=f"Unsupported skill: {skill_normalized}. Supported: pyx, inspect, summary, manifest, learn",
         )
     
     # Backup existing directory if it exists (unless force)
     if output_path.exists() and not force:
         backup_dir = _backup_directory(output_path)
     
-    # Collect environment info (summary skill doesn't need it)
+    # Collect environment info only when needed (can be slow)
     info = get_environment_info(show_progress=show_progress) if skill_normalized in {"pyx", "inspect"} else None
     
     files_created: list[str] = []
@@ -85,7 +85,11 @@ def generate_skill_files(
     # ==========================================================================
     # 1. SKILL.md (core, concise)
     # ==========================================================================
-    if skill_normalized == "summary":
+    if skill_normalized == "manifest":
+        skill_md = build_manifest_skill_md()
+    elif skill_normalized == "learn":
+        skill_md = build_learn_skill_md()
+    elif skill_normalized == "summary":
         skill_md = build_summary_skill_md()
     elif skill_normalized == "inspect":
         skill_md = _generate_inspect_skill_md(info)
@@ -98,7 +102,22 @@ def generate_skill_files(
     # ==========================================================================
     # 2. references
     # ==========================================================================
-    if skill_normalized == "summary":
+    if skill_normalized == "manifest":
+        manifest_md = _generate_manifest_io_md()
+        manifest_path = refs_path / "manifest-io.md"
+        _write_with_backup(manifest_path, manifest_md, force=force)
+        files_created.append(str(manifest_path.resolve()))
+    elif skill_normalized == "learn":
+        learn_md = _generate_learn_skill_md()
+        learn_path = refs_path / "learn-skill.md"
+        _write_with_backup(learn_path, learn_md, force=force)
+        files_created.append(str(learn_path.resolve()))
+
+        summary_ref_md = build_learn_summary_reference_md()
+        summary_ref_path = refs_path / "summary.md"
+        _write_with_backup(summary_ref_path, summary_ref_md, force=force)
+        files_created.append(str(summary_ref_path.resolve()))
+    elif skill_normalized == "summary":
         template_path = refs_path / "leader-summary-template.md"
         _write_with_backup(template_path, build_leader_summary_template_md(), force=force)
         files_created.append(str(template_path.resolve()))
@@ -107,24 +126,13 @@ def generate_skill_files(
         _write_with_backup(images_path, build_markdown_images_md(), force=force)
         files_created.append(str(images_path.resolve()))
     else:
-        # references/manifest-io.md (MANIFEST_IO universal workflow)
-        strict_md = _generate_manifest_io_md(info)
-        strict_path = refs_path / "manifest-io.md"
-        _write_with_backup(strict_path, strict_md, force=force)
-        files_created.append(str(strict_path.resolve()))
+        # No shared references here. `pyx`/`inspect` depend (softly) on `manifest` and `learn`.
+        pass
+    
+    # (learn skill is generated as a standalone `learn` skill)
     
     # ==========================================================================
-    # 3. references/learn-skill.md (skill extraction workflow)
-    #    (pyx skill only)
-    # ==========================================================================
-    if skill_normalized == "pyx":
-        learn_md = _generate_learn_skill_md()
-        learn_path = refs_path / "learn-skill.md"
-        _write_with_backup(learn_path, learn_md, force=force)
-        files_created.append(str(learn_path.resolve()))
-    
-    # ==========================================================================
-    # 4. references/commands.md (CLI help)
+    # 3. references/commands.md (CLI help)
     #    (pyx skill only)
     # ==========================================================================
     if skill_normalized == "pyx":
@@ -134,7 +142,7 @@ def generate_skill_files(
         files_created.append(str(commands_path.resolve()))
     
     # ==========================================================================
-    # 5. references/environment.md (environment + packages)
+    # 4. references/environment.md (environment + packages)
     #    (pyx skill only)
     # ==========================================================================
     if skill_normalized == "pyx":
@@ -144,7 +152,7 @@ def generate_skill_files(
         files_created.append(str(env_path.resolve()))
 
     # ==========================================================================
-    # 6. inspect-only references
+    # 5. inspect-only references
     # ==========================================================================
     if skill_normalized == "inspect":
         inspect_log_md = _generate_inspect_log_template_md()
@@ -253,46 +261,23 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("")
     
     # MANIFEST_IO section (PRIORITY)
-    lines.append("## MANIFEST_IO Mode (Default)")
+    lines.append("## Depends On (Soft)")
     lines.append("")
-    lines.append("A **universal file-first workflow** for LLM/Agent code execution.")
-    lines.append("Works with ANY local environment: **pyx**, **Python venv**, **uv**, **Node.js**, etc.")
+    lines.append("Load these skills alongside `pyx`:")
     lines.append("")
-    lines.append("### Core Principles")
+    lines.append("- `manifest` - MANIFEST_IO contract and workflow")
+    lines.append("- `learn` - skill extraction workflow and summary reference")
     lines.append("")
-    lines.append("1. **Input**: Read from JSON file (not CLI args)")
-    lines.append("2. **Output**: Write to files (manifest + data)")
-    lines.append("3. **Stdout**: Summary only (paths + sizes)")
-    lines.append("4. **Size Check**: Always check output size before reading into LLM context")
+
+    lines.append("## MANIFEST_IO (Default)")
     lines.append("")
-    lines.append("### Environment Detection")
+    lines.append("pyx assumes **MANIFEST_IO** by default:")
+    lines.append("- Read inputs from JSON files")
+    lines.append("- Write outputs to files + a manifest")
+    lines.append("- Print a short stdout summary (paths + sizes)")
+    lines.append("- Check sizes before reading outputs into context")
     lines.append("")
-    lines.append("| Indicator | Environment | Run Command |")
-    lines.append("|-----------|-------------|-------------|")
-    lines.append("| `pyx` available | pyx | `pyx run --file \"temp/task.py\"` |")
-    lines.append("| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` (Unix) or `.venv\\\\Scripts\\\\python temp/task.py` (Win) |")
-    lines.append("| `uv.lock` exists | uv project | `uv run python temp/task.py` |")
-    lines.append("| `node_modules/` exists | Node.js | `node temp/task.js` |")
-    lines.append("| `package.json` (no modules) | Node.js | `npm install && node temp/task.js` |")
-    lines.append("")
-    lines.append("### With pyx (Recommended)")
-    lines.append("")
-    lines.append("```bash")
-    lines.append('pyx ensure-temp --dir "temp"')
-    lines.append("# Write: temp/task.py")
-    lines.append("# Write: temp/task.input.json (if needed)")
-    lines.append('pyx run --file "temp/task.py" --input-path "temp/task.input.json"')
-    lines.append("```")
-    lines.append("")
-    lines.append("### Environment Variables (auto-set by pyx)")
-    lines.append("")
-    lines.append("| Variable | Description |")
-    lines.append("|----------|-------------|")
-    lines.append("| `PYX_INPUT_PATH` | Path to input JSON file |")
-    lines.append("| `PYX_OUTPUT_DIR` | Directory for outputs |")
-    lines.append("| `PYX_OUTPUT_PATH` | Path to manifest file |")
-    lines.append("| `PYX_LOG_PATH` | Path to log file |")
-    lines.append("| `PYX_RUN_ID` | Unique run identifier |")
+    lines.append("See the `manifest` skill for the full spec.")
     lines.append("")
     
     # Non-strict mode
@@ -340,10 +325,8 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     # References
     lines.append("## References")
     lines.append("")
-    lines.append("For detailed documentation, read these files when needed:")
+    lines.append("pyx-specific references:")
     lines.append("")
-    lines.append("- [MANIFEST_IO Details](references/manifest-io.md) - Complete I/O contract, multi-environment examples")
-    lines.append("- [Learn Skill](references/learn-skill.md) - Extract reusable skills (trigger: \"learn skill\")")
     lines.append("- [CLI Commands](references/commands.md) - Full CLI help output")
     lines.append("- [Environment Info](references/environment.md) - Paths, packages, shell info")
     lines.append("")
@@ -351,7 +334,7 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     return "\n".join(lines)
 
 
-def _generate_manifest_io_md(info: "EnvironmentInfo") -> str:
+def _generate_manifest_io_md() -> str:
     """Generate references/manifest-io.md content."""
     lines: list[str] = []
     
@@ -632,6 +615,69 @@ def _generate_manifest_io_md(info: "EnvironmentInfo") -> str:
     return "\n".join(lines)
 
 
+def build_manifest_skill_md() -> str:
+    lines: list[str] = []
+    lines.append("---")
+    lines.append("name: manifest")
+    lines.append('description: "MANIFEST_IO file-first execution contract. Use when: running any tool/script and you need reproducible artifacts. Triggers: manifest, manifest io, file-first, strict mode, MANIFEST_IO."')
+    lines.append("version: 0.1.0")
+    lines.append("---")
+    lines.append("")
+    lines.append("# manifest")
+    lines.append("")
+    lines.append("MANIFEST_IO is the default file-first execution workflow.")
+    lines.append("It standardizes inputs (JSON files), outputs (files + manifest), and stdout (short summary).")
+    lines.append("")
+    lines.append("## References")
+    lines.append("")
+    lines.append("- [MANIFEST_IO Details](references/manifest-io.md)")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_learn_skill_md() -> str:
+    lines: list[str] = []
+    lines.append("---")
+    lines.append("name: learn")
+    lines.append('description: "Distill reusable skills from tasks/chats/artifacts. Triggers: learn skill, save as skill, distill skill, extract skill. Depends on: manifest."')
+    lines.append("version: 0.1.0")
+    lines.append("---")
+    lines.append("")
+    lines.append("# learn")
+    lines.append("")
+    lines.append("Extract reusable skills in a token-efficient and reproducible way.")
+    lines.append("")
+    lines.append("## Depends On (Soft)")
+    lines.append("")
+    lines.append("Load these skills alongside `learn`:")
+    lines.append("")
+    lines.append("- `manifest` - MANIFEST_IO workflow for collecting evidence")
+    lines.append("")
+    lines.append("## References")
+    lines.append("")
+    lines.append("- [learn skill](references/learn-skill.md)")
+    lines.append("- [summary](references/summary.md)")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_learn_summary_reference_md() -> str:
+    lines: list[str] = []
+    lines.append("# summary")
+    lines.append("")
+    lines.append("This reference provides a leader-summary template and image linking guidance.")
+    lines.append("")
+    lines.append("## Template")
+    lines.append("")
+    lines.append(build_leader_summary_template_md().rstrip())
+    lines.append("")
+    lines.append("## Images")
+    lines.append("")
+    lines.append(build_markdown_images_md().rstrip())
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
     """Generate SKILL.md for the inspect skill."""
     lines: list[str] = []
@@ -648,6 +694,14 @@ def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("Run investigations in a reproducible, evidence-first way.")
     lines.append("**Default and required: MANIFEST_IO mode.**")
     lines.append("All investigation artifacts must be written to files.")
+    lines.append("")
+
+    lines.append("## Depends On (Soft)")
+    lines.append("")
+    lines.append("Load these skills alongside `inspect`:")
+    lines.append("")
+    lines.append("- `manifest` - MANIFEST_IO contract and workflow")
+    lines.append("- `learn` - skill extraction workflow and summary reference")
     lines.append("")
 
     lines.append("## Current Environment")
@@ -684,7 +738,7 @@ def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("3. Write outputs to files and index them in a manifest.")
     lines.append("4. Print a short summary only (paths + sizes).")
     lines.append("")
-    lines.append("See: [MANIFEST_IO Details](references/manifest-io.md)")
+    lines.append("See the `manifest` skill for the full spec.")
     lines.append("")
 
     lines.append("## MCP Tools (Only If Requested)")
