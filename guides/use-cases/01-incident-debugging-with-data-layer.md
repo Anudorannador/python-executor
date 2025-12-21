@@ -12,17 +12,17 @@ This guide is **prompt-first**: it focuses on how to instruct an LLM to use `pyt
 When done, you should have:
 
 1) **Evidence (MANIFEST_IO artifacts)** for each major check
-- script + input JSON + manifest + log + output files
+   - script + input JSON + manifest + log + output files
 
 2) **An investigation log**
-- `temp/<topic>.<run_id>.inspect.md` with links to evidence files
+   - `temp/<topic>.<run_id>.inspect.md` with links to evidence files
 
 3) **Two summaries**
-- a teammate-facing explanation (what happened, workaround, next steps)
-- a leader-facing postmortem (impact, root cause, detection gap, prevention actions)
+   - a teammate-facing explanation (what happened, workaround, next steps)
+   - a leader-facing postmortem (impact, root cause, detection gap, prevention actions)
 
 4) **A learn extraction plan**
-- what becomes project-specific knowledge vs what becomes global reusable templates
+   - what becomes project-specific knowledge vs what becomes global reusable templates
 
 ## Copy/Paste Prompt Template (Incident Investigation)
 
