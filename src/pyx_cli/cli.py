@@ -486,9 +486,17 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     skill_parser.add_argument(
         "--skill",
         type=str,
-        choices=["pyx", "inspect"],
+        choices=["pyx", "inspect", "all"],
         default="pyx",
-        help="Which skill template to generate (default: pyx).",
+        help="Which skill template to generate (default: pyx). Use 'all' to generate pyx + inspect.",
+    )
+    default_privacy = os.environ.get("PYX_SKILL_PRIVACY", "public")
+    skill_parser.add_argument(
+        "--privacy",
+        type=str,
+        choices=["public", "local"],
+        default=default_privacy if default_privacy in ("public", "local") else "public",
+        help="Skill output privacy mode. 'public' avoids machine-specific paths; 'local' includes details (may contain absolute paths).",
     )
 
     return parser, gen_parser
@@ -843,12 +851,22 @@ def main() -> NoReturn | None:
     elif args.command in ("generate-skill", "gs"):
         output_dir = Path(args.output_dir)
         selected_skill = getattr(args, "skill", "pyx")
+        privacy = getattr(args, "privacy", "public")
+
+        def _resolve_all_base_dir(path: Path) -> Path:
+            leaf = path.name.strip().lower()
+            return path.parent if leaf in ("pyx", "inspect") else path
         
         # Print only mode - just generate SKILL.md content
         if args.print_only:
             console.print("[bold blue]Collecting environment information...[/bold blue]", file=sys.stderr)
             info = get_environment_info(show_progress=True)
-            if selected_skill == "inspect":
+
+            if selected_skill == "all":
+                pyx_md = _generate_skill_md(info)
+                inspect_md = _generate_inspect_skill_md(info)
+                skill_md = "\n\n---\n\n".join([pyx_md, inspect_md])
+            elif selected_skill == "inspect":
                 skill_md = _generate_inspect_skill_md(info)
             else:
                 skill_md = _generate_skill_md(info)
@@ -862,33 +880,63 @@ def main() -> NoReturn | None:
         # Generate skill files
         console.print("[bold blue]Generating Claude skill files...[/bold blue]")
         try:
-            result = generate_skill_files(
-                output_dir=output_dir,
-                show_progress=True,
-                force=args.force,
-                skill=selected_skill,
-            )
+            if selected_skill == "all":
+                base_dir = _resolve_all_base_dir(output_dir)
+                results = [
+                    generate_skill_files(
+                        output_dir=base_dir / "pyx",
+                        show_progress=True,
+                        force=args.force,
+                        skill="pyx",
+                        privacy=privacy,
+                    ),
+                    generate_skill_files(
+                        output_dir=base_dir / "inspect",
+                        show_progress=True,
+                        force=args.force,
+                        skill="inspect",
+                        privacy=privacy,
+                    ),
+                ]
+                result = results[0]
+            else:
+                results = []
+                result = generate_skill_files(
+                    output_dir=output_dir,
+                    show_progress=True,
+                    force=args.force,
+                    skill=selected_skill,
+                    privacy=privacy,
+                )
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             sys.exit(1)
-        
-        if result.success:
-            console.print(f"\n[green]✓ Generated skill at:[/green] {result.skill_dir}")
-            if result.backup_dir:
-                console.print(f"[dim]  Backup created: {result.backup_dir}[/dim]")
+
+        def _print_result(r) -> None:
+            if not r.success:
+                console.print(f"[red]Error: {r.error}[/red]")
+                sys.exit(1)
+
+            console.print(f"\n[green]✓ Generated skill at:[/green] {r.skill_dir}")
+            if r.backup_dir:
+                console.print(f"[dim]  Backup created: {r.backup_dir}[/dim]")
             console.print("\n[bold]Files created:[/bold]")
-            for f in result.files_created:
+            for f in r.files_created:
                 try:
-                    rel_path = Path(f).relative_to(Path(result.skill_dir)) if result.skill_dir else f
+                    rel_path = Path(f).relative_to(Path(r.skill_dir)) if r.skill_dir else f
                     console.print(f"  • {rel_path}")
                 except ValueError:
                     console.print(f"  • {f}")
-            
-            console.print("\n[dim]To use this skill, copy the directory to your Claude skills folder:[/dim]")
-            console.print(f"[dim]  ~/.claude/skills/pyx/  (or $CLAUDE_SKILLS_PATH)[/dim]")
+
+        if selected_skill == "all":
+            for r in results:
+                _print_result(r)
+            console.print("\n[dim]To use these skills, copy each directory to your Claude skills folder:[/dim]")
+            console.print("[dim]  ~/.claude/skills/<skill>/  (or $CLAUDE_SKILLS_PATH)[/dim]")
         else:
-            console.print(f"[red]Error: {result.error}[/red]")
-            sys.exit(1)
+            _print_result(result)
+            console.print("\n[dim]To use this skill, copy the directory to your Claude skills folder:[/dim]")
+            console.print("[dim]  ~/.claude/skills/<skill>/  (or $CLAUDE_SKILLS_PATH)[/dim]")
         
         sys.exit(0)
     else:

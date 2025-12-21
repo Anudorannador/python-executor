@@ -19,7 +19,6 @@ Use this template for `temp/<topic>.<run_id>.inspect.md`.
 ## Evidence
 
 List artifacts produced during investigation:
-
 - Manifests: `temp/<task>.<run_id>.manifest.json`
 - Logs: `temp/<task>.<run_id>.log.txt`
 - Output files: `temp/<task>.<run_id>.*`

@@ -279,7 +279,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="generate_pyx_skill",
-            description="Generate pyx skill files (SKILL.md + references/) that teach LLM how to use pyx CLI and MANIFEST_IO workflow. This creates a complete Claude skill package for pyx. Use `pyx gs` CLI for the same functionality.",
+            description="Generate skill files (SKILL.md + references/) that teach LLM how to use pyx. Supports skill='pyx', 'inspect', or 'all'. Use `pyx gs` CLI for the same functionality.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -287,6 +287,18 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Directory to create skill files in. Default: './docs/pyx' or $PYX_SKILL_PATH.",
                         "default": "./docs/pyx"
+                    },
+                    "skill": {
+                        "type": "string",
+                        "description": "Which skill to generate: 'pyx', 'inspect', or 'all' (pyx + inspect). Default: 'pyx'.",
+                        "enum": ["pyx", "inspect", "all"],
+                        "default": "pyx"
+                    },
+                    "privacy": {
+                        "type": "string",
+                        "description": "Skill privacy mode: 'public' (safe to commit; avoids machine-specific paths) or 'local' (includes details). Default: 'public'.",
+                        "enum": ["public", "local"],
+                        "default": "public"
                     },
                     "mode": {
                         "type": "string",
@@ -748,36 +760,68 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         import os
         
         output_dir = arguments.get("output_dir") or os.environ.get("PYX_SKILL_PATH", "./docs/pyx")
+        skill = (arguments.get("skill") or "pyx").strip().lower()
+        privacy = (arguments.get("privacy") or "public").strip().lower()
         mode = arguments.get("mode")
         
         # Determine force based on mode
         force = mode == "overwrite"
         
+        def _resolve_all_base_dir(path: Path) -> Path:
+            leaf = path.name.strip().lower()
+            return path.parent if leaf in ("pyx", "inspect") else path
+
+        def _skill_exists(path: Path) -> bool:
+            return path.exists() and (path / "SKILL.md").exists()
+
+        if skill not in {"pyx", "inspect", "all"}:
+            return [TextContent(type="text", text=f"✗ Unsupported skill: {skill}. Use 'pyx', 'inspect', or 'all'.")]
+
+        if privacy not in {"public", "local"}:
+            return [TextContent(type="text", text=f"✗ Unsupported privacy: {privacy}. Use 'public' or 'local'.")]
+
         # Check if directory exists for mode validation
         output_path = Path(output_dir)
-        exists = output_path.exists() and (output_path / "SKILL.md").exists()
+        results: list[Any] = []
+
+        if skill == "all":
+            base_dir = _resolve_all_base_dir(output_path)
+            targets = {"pyx": base_dir / "pyx", "inspect": base_dir / "inspect"}
+
+            if mode == "create":
+                existing = [name for name, p in targets.items() if _skill_exists(p)]
+                if existing:
+                    return [TextContent(
+                        type="text",
+                        text=f"✗ Skill already exists for: {', '.join(existing)} under {str(base_dir)}. Use mode='merge' or mode='overwrite'."
+                    )]
+
+            for k, p in targets.items():
+                results.append(generate_skill_files(str(p), show_progress=False, force=force, skill=k, privacy=privacy))
+        else:
+            exists = _skill_exists(output_path)
+            if mode == "create" and exists:
+                return [TextContent(
+                    type="text",
+                    text=f"✗ Skill already exists at {output_dir}. Use mode='merge' or mode='overwrite'."
+                )]
+            results.append(generate_skill_files(output_dir, show_progress=False, force=force, skill=skill, privacy=privacy))
         
-        if mode == "create" and exists:
-            return [TextContent(
-                type="text",
-                text=f"✗ Skill already exists at {output_dir}. Use mode='merge' or mode='overwrite'."
-            )]
-        
-        result = generate_skill_files(output_dir, show_progress=False, force=force)
-        
-        if not result.success:
-            return [TextContent(
-                type="text",
-                text=f"✗ Failed to generate pyx skill: {result.error}"
-            )]
-        
-        mode_used = mode or ("overwrite" if exists else "create")
-        
-        return [TextContent(
-            type="text",
-            text=f"✓ Generated pyx skill at: {result.skill_dir}\n\nMode: {mode_used}\nFiles created:\n" + 
-                 "\n".join(f"  • {f}" for f in result.files_created)
-        )]
+        failures = [r for r in results if not getattr(r, "success", False)]
+        if failures:
+            msg = "\n".join(f"  • {getattr(r, 'error', 'Unknown error')}" for r in failures)
+            return [TextContent(type="text", text=f"✗ Failed to generate skill(s):\n{msg}")]
+
+        mode_used = mode or "overwrite" if force else "create"
+
+        blocks: list[str] = []
+        for r in results:
+            blocks.append(
+                f"✓ Generated skill at: {r.skill_dir}\nMode: {mode_used}\nFiles created:\n" +
+                "\n".join(f"  • {f}" for f in r.files_created)
+            )
+
+        return [TextContent(type="text", text="\n\n".join(blocks))]
     
     else:
         return [TextContent(

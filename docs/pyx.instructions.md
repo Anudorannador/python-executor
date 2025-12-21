@@ -20,7 +20,7 @@ This file combines:
 
 - **OS**: Windows (AMD64)
 - **Shell**: powershell (`C:\Program Files\PowerShell\7\pwsh.EXE`)
-- **pyx Python**: 3.12.12 (`C:\Users\<USER>\AppData\Roaming\uv\tools\python-executor-mcp\Scripts\python.exe`)
+- **pyx Python**: 3.12.12 (`C:\Users\<REDACTED_USER>\AppData\Roaming\uv\tools\python-executor-mcp\Scripts\python.exe`)
 - **pyx version**: 0.1.0
 
 > **Note**: `pyx run` executes code using the **pyx Python** shown above, NOT the system Python.
@@ -144,8 +144,8 @@ def head(path: Path, n: int = 50) -> str:
 
 **pyx automatically loads `.env` files** from these locations (later overrides earlier):
 
-1. **User config**: `C:\Users\<USER>\AppData\Roaming\pyx\.env` *(not found)*
-2. **Local (cwd)**: `C:\Users\<USER>\repo\python-executor\.env`
+1. **User config**: `C:\Users\<REDACTED_USER>\AppData\Roaming\pyx\.env` *(not found)*
+2. **Local (cwd)**: `C:\Users\<REDACTED_USER>\repo\python-executor\.env`
 
 > **Important**: These variables are **ONLY** available when using `pyx`.
 
@@ -176,25 +176,25 @@ cargo, choco, code, conda, convert, curl, dotnet, find, git, node, npm, npx, pin
 ### Paths
 
 ```text
-pyx executable: C:\Users\<USER>\.local\bin\pyx.EXE
-pyx-mcp executable: C:\Users\<USER>\.local\bin\pyx-mcp.EXE
-pyx Python (sys.executable): C:\Users\<USER>\AppData\Roaming\uv\tools\python-executor-mcp\Scripts\python.exe
+pyx executable: C:\Users\<REDACTED_USER>\.local\bin\pyx.EXE
+pyx-mcp executable: C:\Users\<REDACTED_USER>\.local\bin\pyx-mcp.EXE
+pyx Python (sys.executable): C:\Users\<REDACTED_USER>\AppData\Roaming\uv\tools\python-executor-mcp\Scripts\python.exe
 ```
 
 ### Module locations
 
 ```text
-pyx_core.__file__: C:\Users\<USER>\repo\python-executor\src\pyx_core\__init__.py
-pyx_cli.__file__: C:\Users\<USER>\repo\python-executor\src\pyx_cli\__init__.py
-pyx_mcp.__file__: C:\Users\<USER>\repo\python-executor\src\pyx_mcp\__init__.py
+pyx_core.__file__: C:\Users\<REDACTED_USER>\repo\python-executor\src\pyx_core\__init__.py
+pyx_cli.__file__: C:\Users\<REDACTED_USER>\repo\python-executor\src\pyx_cli\__init__.py
+pyx_mcp.__file__: C:\Users\<REDACTED_USER>\repo\python-executor\src\pyx_mcp\__init__.py
 ```
 
 ### Python site-packages
 
 ```text
-site-packages: C:\Users\<USER>\AppData\Roaming\uv\tools\python-executor-mcp
-site-packages: C:\Users\<USER>\AppData\Roaming\uv\tools\python-executor-mcp\Lib\site-packages
-user-site: C:\Users\<USER>\AppData\Roaming\Python\Python312\site-packages
+site-packages: C:\Users\<REDACTED_USER>\AppData\Roaming\uv\tools\python-executor-mcp
+site-packages: C:\Users\<REDACTED_USER>\AppData\Roaming\uv\tools\python-executor-mcp\Lib\site-packages
+user-site: C:\Users\<REDACTED_USER>\AppData\Roaming\Python\Python312\site-packages
 ```
 
 ### Quick update / reinstall
@@ -202,7 +202,7 @@ user-site: C:\Users\<USER>\AppData\Roaming\Python\Python312\site-packages
 If you are developing from the source repo (editable install), update/reinstall from the repo root:
 
 ```bash
-# Repo root (best guess): C:\Users\<USER>\repo\python-executor
+# Repo root (best guess): C:\Users\<REDACTED_USER>\repo\python-executor
 # Reinstall pyx in editable mode
 uv tool install -e ".[full]"
 ```
@@ -424,8 +424,8 @@ cargo, choco, code, conda, convert, curl, dotnet, find, git, node, npm, npx, pin
 
 `pyx` automatically loads `.env` files from these locations (later overrides earlier):
 
-1. **User config**: `C:\Users\<USER>\AppData\Roaming\pyx\.env` *(not found)*
-2. **Local (cwd)**: `C:\Users\<USER>\repo\python-executor\.env`
+1. **User config**: `C:\Users\<REDACTED_USER>\AppData\Roaming\pyx\.env` *(not found)*
+2. **Local (cwd)**: `C:\Users\<REDACTED_USER>\repo\python-executor\.env`
 
 > **Important**: These variables are auto-loaded by `pyx`. If you run commands outside `pyx`, these `.env` files may not be loaded.
 
@@ -525,7 +525,7 @@ options:
 ## `pyx generate-skill --help` (aliases: gs)
 
 ```text
-usage: pyx generate-skill [-h] [--output-dir OUTPUT_DIR] [--force] [--print]
+usage: pyx generate-skill [-h] [--output-dir OUTPUT_DIR] [--force] [--print] [--skill {pyx,inspect,all}] [--privacy {public,local}]
 
 options:
   -h, --help            show this help message and exit
@@ -533,6 +533,10 @@ options:
                         Output directory (default: $PYX_SKILL_PATH or ./docs/pyx)
   --force               Overwrite without backup
   --print               Print SKILL.md to stdout instead of saving
+  --skill {pyx,inspect,all}
+                        Which skill template to generate (default: pyx). Use 'all' to generate pyx + inspect.
+  --privacy {public,local}
+                        Skill output privacy mode. 'public' avoids machine-specific paths; 'local' includes details (may contain absolute paths).
 ```
 
 ## `pyx info --help`
@@ -564,8 +568,8 @@ options:
 ## `pyx run --help`
 
 ```text
-usage: pyx run [-h] [--cwd CWD] [--timeout TIMEOUT] [--async] [--input-path INPUT_PATH] [--output-path OUTPUT_PATH]
-               [--output-dir OUTPUT_DIR] (--code CODE | --file FILE | --base64 BASE64) [--yes]
+usage: pyx run [-h] [--cwd CWD] [--timeout TIMEOUT] [--async] [--input-path INPUT_PATH] [--output-path OUTPUT_PATH] [--output-dir OUTPUT_DIR]
+               (--code CODE | --file FILE | --base64 BASE64) [--yes]
                [script_args ...]
 
 positional arguments:
@@ -580,11 +584,10 @@ options:
   --input-path INPUT_PATH
                         Optional path to a JSON input file. Exposed to the script via env var PYX_INPUT_PATH.
   --output-path OUTPUT_PATH
-                        Optional manifest path (Strategy A). If not provided, pyx writes <base>.<run_id>.manifest.json
-                        into the resolved output directory.
+                        Optional manifest path (Strategy A). If not provided, pyx writes <base>.<run_id>.manifest.json into the resolved output
+                        directory.
   --output-dir OUTPUT_DIR
-                        Directory used for auto-generated outputs (default: temp). If --input-path is provided, its
-                        directory is used by default.
+                        Directory used for auto-generated outputs (default: temp). If --input-path is provided, its directory is used by default.
   --code CODE, -c CODE  Inline Python code to execute
   --file FILE, -f FILE  Path to a Python script file. Use -- to pass args to script.
   --base64 BASE64, -b BASE64

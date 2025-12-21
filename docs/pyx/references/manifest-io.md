@@ -15,18 +15,15 @@ Works with ANY local environment: pyx, Python venv, uv, Node.js, etc.
 **Rule: If you need the network, still use MANIFEST_IO. Do not directly fetch inside the chat.**
 
 Why:
-
 - Many websites block scraping and require a local toolchain (browser, proxy, retries).
 - MANIFEST_IO keeps evidence as files (script + input + logs + outputs).
 
 Proxy (uv/HTTP) environment variables to check first:
-
 - `PYX_UV_HTTP_PROXY`
 - `PYX_UV_HTTPS_PROXY`
 - `PYX_UV_NO_PROXY`
 
 If web access fails:
-
 - **STOP** and ask the user what to do next: set/update proxy, or choose an alternative source.
 - Do not keep trying different approaches silently.
 
@@ -35,7 +32,6 @@ If web access fails:
 **Rule: Never guess connection details. List candidate env vars and ask the user which one to use.**
 
 Common examples (project-dependent):
-
 - Redis: `REDIS_URL`
 - MySQL: `MYSQL_URL`
 - Postgres: `POSTGRES_URL`, `DATABASE_URL`
@@ -44,7 +40,6 @@ Common examples (project-dependent):
 - SSH: `SSH_HOST`, `SSH_PORT`, `SSH_USER`, `SSH_PRIVATE_KEY_PATH`
 
 Before connecting:
-
 1. Show the env var names you intend to use.
 2. Ask the user to confirm which env var(s) and which environment/cluster.
 3. Only then proceed via a MANIFEST_IO script that writes logs + outputs.
@@ -54,7 +49,6 @@ Before connecting:
 This mode is **DEFAULT**. No trigger phrase needed.
 
 Opt-out only when user explicitly says:
-
 - "no strict mode" / "simple mode"
 
 ## Directory Structure (Universal)
@@ -188,7 +182,6 @@ console.log(`Result saved: ${outputFile} (${fs.statSync(outputFile).size} bytes)
 ### 1. Create input file
 
 `temp/fetch_data.input.json`:
-
 ```json
 {
   "url": "https://api.example.com/data",
@@ -199,7 +192,6 @@ console.log(`Result saved: ${outputFile} (${fs.statSync(outputFile).size} bytes)
 ### 2. Create script
 
 `temp/fetch_data.py`:
-
 ```python
 import os
 import json

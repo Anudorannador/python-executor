@@ -11,12 +11,13 @@ Generates Claude Code skill files:
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import importlib
 import importlib.metadata
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from ..shell_syntax import SYNTAX_PATTERN_ORDER
 from .common import GenerateSkillResult
@@ -30,6 +31,7 @@ def generate_skill_files(
     show_progress: bool = False,
     force: bool = False,
     skill: str = "pyx",
+    privacy: Literal["public", "local"] = "public",
 ) -> GenerateSkillResult:
     """Generate Claude skill files for pyx.
     
@@ -119,7 +121,7 @@ def generate_skill_files(
     #    (pyx skill only)
     # ==========================================================================
     if skill_normalized == "pyx":
-        env_md = _generate_environment_md(info)
+        env_md = _generate_environment_md(info, privacy=privacy)
         env_path = refs_path / "environment.md"
         _write_with_backup(env_path, env_md, force=force)
         files_created.append(str(env_path.resolve()))
@@ -167,6 +169,43 @@ def _backup_directory(path: Path) -> str | None:
 def _write_with_backup(path: Path, content: str, force: bool = False) -> None:
     """Write content to file (directory backup is handled separately)."""
     path.write_text(content, encoding="utf-8")
+
+
+def _redact_for_public(text: str) -> str:
+    """Best-effort redaction of local/PII-ish paths from generated outputs.
+
+    This is intended to keep skill artifacts safe to commit to public repos.
+    """
+    redacted = text
+
+    # Redact the current user's home directory.
+    try:
+        home = str(Path.home())
+        if home:
+            # Preserve Windows-ness when possible.
+            replacement = r"C:\Users\<REDACTED_USER>" if sys.platform == "win32" else "/home/<REDACTED_USER>"
+            redacted = redacted.replace(home, replacement)
+    except Exception:
+        pass
+
+    # Redact common absolute home patterns (even if Path.home() didn't match).
+    # Windows: C:\Users\Name\...
+    redacted = redacted.replace("C:\\Users\\", "C:\\Users\\<REDACTED_USER>\\")
+    # macOS: /Users/Name/...
+    redacted = redacted.replace("/Users/", "/Users/<REDACTED_USER>/")
+
+    # Redact VS Code profile ids inside typical prompts paths.
+    # Example: ...\profiles\-7c411965\prompts\...
+    import re
+    redacted = re.sub(r"(\\profiles\\)[^\\]+(\\prompts\\)", r"\1<REDACTED_PROFILE>\2", redacted, flags=re.IGNORECASE)
+
+    # Redact credential-like URLs if they ever appear.
+    redacted = re.sub(r"\b(mysql\+pymysql|mysql|postgres|redis)://[^\s]+", r"<REDACTED_URL>", redacted, flags=re.IGNORECASE)
+
+    # Redact likely tokens in query-like strings.
+    redacted = re.sub(r"(?i)(token|apikey|api_key|password)=([^\s&]+)", r"\1=<REDACTED>", redacted)
+
+    return redacted
 
 
 def _generate_skill_md(info: "EnvironmentInfo") -> str:
@@ -653,6 +692,15 @@ def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("- Node.js: `package.json`, lockfile, `node_modules/`")
     lines.append("- Rust/Cargo: `Cargo.toml`, `Cargo.lock`, `target/`")
     lines.append("")
+    lines.append("Documentation targets (only when needed):")
+    lines.append("- Official docs (e.g. Microsoft Docs) to confirm API contracts")
+    lines.append("- DeepWiki/repo docs to confirm intended usage patterns")
+    lines.append("")
+    lines.append("If using docs/MCP tools:")
+    lines.append("- Confirm the source/version with the user")
+    lines.append("- Record the MCP name + query")
+    lines.append("- Save evidence to files via MANIFEST_IO and link paths in the investigation log")
+    lines.append("")
     lines.append("See: [Code Verification](references/code-verification.md)")
     lines.append("")
 
@@ -728,6 +776,50 @@ def _generate_code_verification_md() -> str:
     lines.append("- Prefer lockfiles and installed outputs over assumptions.")
     lines.append("- Record paths/sizes of artifacts in the investigation log.")
     lines.append("")
+
+    lines.append("## Documentation Verification (MCP / Official Docs)")
+    lines.append("")
+    lines.append("Sometimes “verify against code” is not enough:")
+    lines.append("")
+    lines.append("- You may need the *intended* API behavior (official docs).")
+    lines.append("- You may need usage patterns (examples, migration notes, deprecations).")
+    lines.append("- The local environment may not contain the relevant source (e.g., remote SaaS APIs).")
+    lines.append("")
+
+    lines.append("### When to use docs")
+    lines.append("")
+    lines.append("Use documentation verification when any of these are true:")
+    lines.append("")
+    lines.append("- The question is about an API contract (parameters, defaults, return shapes, errors).")
+    lines.append("- The code is generated/compiled/minified and hard to inspect locally.")
+    lines.append("- The installed version differs from what the user targets (you need to confirm the version).")
+    lines.append("- The user explicitly requests “check the docs”.")
+    lines.append("")
+
+    lines.append("### How to verify docs (evidence-based)")
+    lines.append("")
+    lines.append("Use MCP tools when available (examples):")
+    lines.append("")
+    lines.append("- DeepWiki (repo-aware docs)")
+    lines.append("- Microsoft Docs (official product API references)")
+    lines.append("- Other MCP doc/search tools available in the environment")
+    lines.append("")
+    lines.append("Rules:")
+    lines.append("")
+    lines.append("1. **Confirm the source** (which site/repo/version). Do not guess versions.")
+    lines.append("2. **Record the exact query** you ran (tool name + query string).")
+    lines.append("3. **Capture evidence** as files via MANIFEST_IO:")
+    lines.append("   - outputs: extracted snippets, URLs, key sections, version notes")
+    lines.append("   - manifest + log paths in the investigation log")
+    lines.append("4. If docs and local code disagree, **report both** and state which one is authoritative for the user’s target version.")
+    lines.append("")
+    lines.append("Recommended artifacts:")
+    lines.append("")
+    lines.append("- `temp/<topic>.<run_id>.docs.json` (structured findings)")
+    lines.append("- `temp/<topic>.<run_id>.docs.txt` (human-readable notes)")
+    lines.append("- `temp/<topic>.<run_id>.manifest.json` + `temp/<topic>.<run_id>.log.txt`")
+    lines.append("")
+
     lines.append("## Common Targets")
     lines.append("")
     lines.append("### Python")
@@ -1012,13 +1104,49 @@ def _generate_commands_md(info: "EnvironmentInfo") -> str:
     return "\n".join(lines)
 
 
-def _generate_environment_md(info: "EnvironmentInfo") -> str:
-    """Generate references/environment.md content."""
+def _generate_environment_md(
+    info: "EnvironmentInfo",
+    *,
+    privacy: Literal["public", "local"] = "public",
+) -> str:
+    """Generate references/environment.md content.
+
+    - privacy='public': safe to commit (no machine-specific paths/package inventory)
+    - privacy='local': includes details, but redacts common sensitive path patterns
+    """
     lines: list[str] = []
+
+    privacy_normalized: Literal["public", "local"] = "local" if str(privacy).strip().lower() == "local" else "public"
     
     lines.append("# pyx Environment Information")
     lines.append("")
-    lines.append("Details about the pyx execution environment.")
+    if privacy_normalized == "public":
+        lines.append("Public-safe environment guidance for pyx.")
+        lines.append("This file avoids embedding machine-specific paths or package inventories.")
+        lines.append("")
+        lines.append("## Runtime Detection (Recommended)")
+        lines.append("")
+        lines.append("To learn the *current* environment on any machine, run:")
+        lines.append("")
+        lines.append("```bash")
+        lines.append("pyx info")
+        lines.append("pyx info --json")
+        lines.append("```")
+        lines.append("")
+        lines.append("`pyx info --json` includes:")
+        lines.append("- OS + shell type")
+        lines.append("- dynamically-tested shell syntax support")
+        lines.append("- env var *keys* (values hidden)")
+        lines.append("- available system commands (111 checks)")
+        lines.append("")
+        lines.append("## Notes")
+        lines.append("")
+        lines.append("- Do not assume tools exist. Always check `pyx info --commands` or `pyx info --json`.")
+        lines.append("- Prefer using external tools via `subprocess.run()` inside pyx scripts (not raw shell).")
+        lines.append("")
+        return "\n".join(lines)
+
+    lines.append("Details about the current pyx execution environment (local mode).")
     lines.append("")
     
     # System Info
@@ -1113,4 +1241,4 @@ def _generate_environment_md(info: "EnvironmentInfo") -> str:
                 lines.append(f"| {s['description']} | {ok} | `{s['syntax']}` |")
         lines.append("")
     
-    return "\n".join(lines)
+    return _redact_for_public("\n".join(lines))

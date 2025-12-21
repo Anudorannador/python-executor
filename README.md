@@ -1,138 +1,150 @@
 # python-executor (pyx)
 
-A cross-platform Python code executor for LLM/Agent integration — replaces shell commands with Python to avoid escaping and compatibility issues.
+`pyx` is a local, cross-platform executor for LLM/Agent workflows.
+The main value is NOT “running one-off Python”. The main value is generating **re-loadable artifacts** so new LLM sessions can reliably recover context and keep work evidence-based.
 
-## Why python-executor?
+This repo is designed around four repeatable outputs:
 
-When LLMs generate shell commands, they often fail due to platform differences:
+- **Skills**: reusable, file-based rules + references (bootstrap for new sessions)
+- **Instructions**: a single combined prompt file for agents
+- **MANIFEST_IO runs**: scripts + input JSON + manifest + log + outputs
+- **Investigation logs**: reproducible code verification and audits
 
-| Problem | Shell | python-executor |
-|---------|-------|-----------------|
-| Platform variables | `%VAR%` vs `$VAR` | `os.environ['VAR']` |
-| Command chaining | `&&`, `\|`, `>` differ | Python control flow |
-| Quoting/escaping | Nested quotes hell | Native strings |
-| Missing tools | `curl`, `jq`, `grep` | Pre-installed packages |
-| Environment | Manual setup | Auto-loads `.env` files |
+## Start Here (Public Repo Workflow)
 
-### MANIFEST_IO Mode
+### 1) Generate public-safe skills (recommended)
 
-A **universal file-first workflow** for LLM/Agent code execution. Works with ANY local environment.
-
-If you include the exact phrase `MANIFEST_IO` in your prompt, the generated instructions enforce:
-
-- **Input**: Read from JSON file (not CLI args)
-- **Output**: Write to files (manifest + data)
-- **Stdout**: Summary only (paths + sizes)
-- **Size Check**: Always check output size before reading into LLM context
-
-**Environment Detection:**
-
-| Indicator | Environment | Run Command |
-|-----------|-------------|-------------|
-| `pyx` available | pyx (recommended) | `pyx run --file "temp/task.py"` |
-| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` |
-| `uv.lock` exists | uv project | `uv run python temp/task.py` |
-| `node_modules/` exists | Node.js | `node temp/task.js` |
-
-See [docs/pyx/references/manifest-io.md](docs/pyx/references/manifest-io.md) for complete examples.
-
-## Quick Start (Local Development)
-
-> **Note**: This tool is designed for local development. Use editable mode so you can customize packages and `.env` configuration.
+Generate a committed `skills/` directory that does not embed machine-specific paths:
 
 ```bash
-# Clone and install (editable mode with all packages)
-git clone https://github.com/Anudorannador/python-executor.git
-cd python-executor
-uv tool install -e ".[full]"
-
-# Create user config directory and .env file
-# Windows:
-mkdir %APPDATA%\pyx
-copy .env.example %APPDATA%\pyx\.env
-# Unix/macOS:
-mkdir -p ~/.config/pyx
-cp .env.example ~/.config/pyx/.env
-
-# Verify installation
-pyx info
-pyx run --code "print('hello')"
+pyx gs --skill all --privacy public -o skills
 ```
 
-`pyx run` writes a **manifest** and a **log** by default (see the printed `Manifest saved: ...` and `Log saved: ...` paths).
+In every new session, instruct the LLM to read:
 
-After installation, `pyx` (or `python-executor`) is available globally from any directory.
+- `skills/pyx/SKILL.md`
+- `skills/pyx/references/commands.md`
+- `skills/pyx/references/environment.md`
 
-## CLI Usage
+> **Why `--privacy public`?** It avoids leaking usernames/absolute paths. Runtime facts should be detected via `pyx info --json` on each machine.
 
-| Command | Description |
-|---------|-------------|
-| `pyx --version` | Show version |
-| `pyx info` | Show environment info (OS, syntax support, env keys, commands) |
-| `pyx info --system` | Show only system info |
-| `pyx info --syntax` | Show 20 shell patterns with dynamic support detection |
-| `pyx info --env` | Show only environment variable keys |
-| `pyx info --commands` | Show 111 available commands detection |
-| `pyx info --json` | Output as JSON (for programmatic use) |
-| `pyx gi` | Generate a single combined instructions file |
-| `pyx gi -o path` | Save to custom path (default: `$PYX_INSTRUCTIONS_PATH` or `./docs/pyx.instructions.md`) |
-| `pyx gi --ask` | Ask before replacing (default: auto-backup) |
-| `pyx gi --print` | Print markdown to stdout instead of saving |
-| `pyx gs` | Generate Claude skill files (SKILL.md + references/) |
-| `pyx gs -o path` | Save to custom directory (default: `$PYX_SKILL_PATH` or `./docs/pyx`) |
-| `pyx gs --print` | Print SKILL.md to stdout instead of saving |
-| `pyx run --code "..."` | Run inline Python code |
-| `pyx run --code "..." --async` | Run async code (supports top-level await) |
-| `pyx run --code "..." --timeout 10` | Run with 10s timeout (kills infinite loops) |
-| `pyx run --base64 "..."` | Run base64-encoded code (legacy/interactive; asks for confirmation) |
-| `pyx run --file "path.py"` | Run a Python script file |
-| `pyx run --file "path.py" -- args` | Run script with arguments |
-| `pyx run --cwd "dir" --code "..."` | Run code in specified directory |
-| `pyx run --input-path "in.json" --file "task.py"` | Provide JSON input via `PYX_INPUT_PATH` |
-| `pyx run --output-path "manifest.json" --file "task.py"` | Force manifest path (Strategy A). A log file is also produced under the resolved output directory. |
-| `pyx python` | Launch the pyx Python interpreter (REPL) |
-| `pyx add --package "name"` | Install a package to optional dependencies |
-| `pyx ensure-temp` | Ensure temp directory exists |
+### 2) Generate a single instructions file
 
-### Handling Special Characters (Recommended: File-first)
+Generate a combined, environment-aware instructions file (useful for VS Code prompts / Copilot setup):
 
-If your payload contains regex, quotes, backslashes, JSON, `&`, or any other special characters, **do not put the payload in the shell command line**.
-Instead, write a `.py` file and run it with `--file`:
+```bash
+pyx gi
+```
+
+Default output: `$PYX_INSTRUCTIONS_PATH` or `./docs/pyx.instructions.md`.
+
+### 3) Use MANIFEST_IO for all real work
+
+**MANIFEST_IO** is the file-first execution contract:
+
+- Inputs come from files (JSON for structured input)
+- Outputs are files, indexed by a manifest
+- Stdout is only a short summary (paths + sizes)
+- Always check output size before loading into an LLM context
+
+Reference: [docs/pyx/references/manifest-io.md](docs/pyx/references/manifest-io.md)
+
+## Core Workflows
+
+### Generate skills
+
+Generate skill packages (Claude-style: `SKILL.md` + `references/`):
+
+```bash
+# Public-safe (recommended for committing)
+pyx gs --skill all --privacy public -o skills
+
+# Local (machine-specific; may include absolute paths/package inventory)
+pyx gs --skill all --privacy local -o skills
+```
+
+Notes:
+
+- `--skill pyx` focuses on execution + MANIFEST_IO.
+- `--skill inspect` focuses on investigation logs + code verification.
+- `--skill all` generates both.
+
+### Session bootstrap (what the LLM should do first)
+
+LLM chat history is unreliable. Treat the repo as the source of truth.
+
+Minimal bootstrap sequence:
+
+1. Read the `skills/pyx/` files listed above
+2. Run `pyx info --json` if environment/tooling matters
+3. Execute tasks via `pyx run --file` using MANIFEST_IO
+
+### MANIFEST_IO (file-first execution)
+
+Recommended pattern:
 
 ```bash
 pyx ensure-temp --dir "temp"
-# Write code to temp/pyx_task.py
-pyx run --file "temp/pyx_task.py" -- --args
+# Write: temp/<task>.py
+# Write: temp/<task>.input.json
+pyx run --file "temp/<task>.py" --input-path "temp/<task>.input.json"
 ```
 
-> **Note**: `--base64` is supported but is legacy/interactive in this CLI (it shows decoded code and asks for confirmation).
-> `-y/--yes` is deprecated and is not allowed with `--base64`.
+The executed script can read these runtime variables (auto-set by `pyx run`):
 
-### Preventing Output Explosions (Recommended: Input JSON + Manifest + Files)
+- `PYX_INPUT_PATH` (optional)
+- `PYX_OUTPUT_DIR` (always)
+- `PYX_OUTPUT_PATH` (always; manifest path)
+- `PYX_LOG_PATH` (always)
+- `PYX_RUN_ID` (always)
 
-LLM contexts are sensitive to huge outputs (1000-line files, tickers, large DB query results). To avoid token blow-ups and unusable logs, use this workflow:
+### Code verification + investigation logs
 
-- **Always write a script** under `temp/`.
-- **All inputs** go into a JSON file: `temp/<task>.<variant>.input.json`.
-- **Write one manifest** + any number of output files (e.g. `.txt`, `.json`, `.jsonl`).
-- **Stdout is only a summary**: manifest/log paths + sizes + tiny preview or keyword hits.
+For “verify against actual code” tasks, use the `inspect` workflow:
 
-Naming convention example:
+- Create a dedicated log: `temp/<topic>.<run_id>.inspect.md`
+- Collect evidence via MANIFEST_IO scripts
+- Record manifest/log/output file paths in the log
 
-- `temp/fetch_rates.py`
-- `temp/fetch_rates.a.input.json` -> `fetch_rates.<run_id>.manifest.json` + `fetch_rates.<run_id>.log.txt` + dynamic outputs
+References:
 
-Before reading any output into the LLM, **check size/line-count first** and only load a slice (or search keywords) when the file is large.
+- [docs/inspect/references/code-verification.md](docs/inspect/references/code-verification.md)
+- [docs/inspect/references/investigation-log-template.md](docs/inspect/references/investigation-log-template.md)
 
-By default, when `--input-path` is provided, `PYX_OUTPUT_DIR` is set to the input JSON directory (so inputs + script + outputs can live together).
+### Learn skill (extract reusable workflows)
 
-`pyx run` is designed to support this workflow: it always sets `PYX_OUTPUT_PATH` (manifest), `PYX_OUTPUT_DIR`, `PYX_RUN_ID`, and `PYX_LOG_PATH`. You can optionally pass `--input-path` / `--output-path` to standardize I/O.
+Use the phrase “learn skill” to trigger a token-efficient workflow that:
 
-If you want to hard-enforce this workflow in prompting, include the exact phrase `MANIFEST_IO` in your prompt; the generated instructions treat it as a strict-mode trigger.
+1. Reads `temp/.history.jsonl` and recent manifests/logs
+2. Summarizes headers only
+3. Proposes `create` / `merge` / `overwrite`
+4. Generates a SKILL preview
+5. Saves only after explicit user confirmation
 
-## LLM/Agent Integration
+Reference: [docs/pyx/references/learn-skill.md](docs/pyx/references/learn-skill.md)
 
-### Option 1: MCP Server
+## Installation (Local Development)
+
+```bash
+git clone https://github.com/Anudorannador/python-executor.git
+cd python-executor
+uv tool install -e ".[full]"
+```
+
+Configure `.env`:
+
+- Windows: `%APPDATA%\pyx\.env`
+- Unix/macOS: `~/.config/pyx/.env`
+
+Start from: `.env.example`.
+
+Verify:
+
+```bash
+pyx info
+```
+
+## MCP integration (optional)
 
 Add to VS Code `settings.json`:
 
@@ -148,207 +160,35 @@ Add to VS Code `settings.json`:
 }
 ```
 
-**Available MCP Tools:**
+## Configuration (.env)
 
-| Tool | Description |
-|------|-------------|
-| `run_python_code` | Execute inline Python code (supports `timeout`) |
-| `run_async_python_code` | Execute async code with top-level await (supports `timeout`) |
-| `run_python_file` | Execute a Python script file (supports `timeout`) |
-| `install_package` | Install a Python package (uses `PYX_UV_*` proxy settings) |
-| `ensure_directory` | Ensure a directory exists |
-| `get_environment_info` | Get OS, 20 shell syntax patterns (dynamically tested), env keys, 111 commands |
-| `generate_pyx_instructions` | (Deprecated) Generate pyx-usage instructions |
-| `generate_shell_instructions` | (Deprecated) Generate shell-usage instructions |
-| `generate_pyx_skill` | Generate pyx skill files (teaches LLM how to use pyx) |
+Common `PYX_*` configuration variables:
 
-### Skill-Based Learning (Universal)
+- `PYX_INSTRUCTIONS_PATH` (output for `pyx gi`)
+- `PYX_PYX_INSTRUCTIONS_STYLE` (`file` recommended)
+- `PYX_SKILL_PATH` (default output dir for `pyx gs`)
+- `PYX_SKILL_PRIVACY` (`public` recommended for public repos)
+- `PYX_UV_HTTP_PROXY`, `PYX_UV_HTTPS_PROXY`, `PYX_UV_NO_PROXY`, `PYX_UV_INDEX_URL` (uv/pip proxy/index)
 
-Extract reusable skills from any source (not limited to pyx):
+See: `.env.example`
 
-1. Say `learn skill` in chat
-2. LLM identifies source (task files, chat, code)
-3. Summarizes content (token-efficient, headers only)
-4. Scans existing skills (headers only)
-5. Recommends: `create` / `merge` / `overwrite`
-6. Generates SKILL preview
-7. **User confirms** → saves to `docs/<skill>/SKILL.md` (project) or `~/.claude/skills/<skill>/SKILL.md` (global)
+## Project structure
 
-**Shell syntax patterns checked by `pyx info --syntax`:**
-
-| Pattern | Description | pyx Alternative |
-|---------|-------------|-----------------|
-| Variable | Environment variable expansion | `os.environ['VAR']` |
-| Chaining (&&) | Run on success | `cmd1(); cmd2()` |
-| Chaining (\|\|) | Run on failure | `try/except` |
-| Chaining (;) | Run always | `cmd1(); cmd2()` |
-| Pipe | Pipe output | `subprocess.PIPE` |
-| Redirect (>, 2>, &>) | Redirect output | `open('f', 'w')` |
-| Glob (*, **) | Wildcard matching | `Path.glob()` |
-| Command substitution | Capture output | `check_output()` |
-| Arithmetic | Math in shell | Python math |
-| Exit code | Check return code | `result.returncode` |
-| Background | Run in background | `Popen()` or `--async` |
-| Test file/dir | Check existence | `Path.exists()` |
-| String interpolation | Variable in string | `f'hello {var}'` |
-| Here-string | Multi-line input | `'''text'''` |
-| Null device | Discard output | `subprocess.DEVNULL` |
-
-**Commands checked by `pyx info --commands`:**
-
-| Category | Commands |
-|----------|----------|
-| VCS | git, svn, hg |
-| Package (Lang) | npm, yarn, pip, uv, cargo, go, composer, gem, maven, gradle... |
-| Package (System) | brew, apt, yum, pacman, choco, scoop, winget... |
-| Containers & Cloud | docker, podman, kubectl, helm, terraform, aws, az, gcloud |
-| Languages | python, node, java, go, rustc, ruby, php, perl, dotnet |
-| Build | make, cmake, ninja, msbuild, gcc, clang |
-| Network | curl, wget, ssh, scp, rsync, ping, nmap |
-| Database | mysql, psql, sqlite3, mongosh, redis-cli |
-| Text | grep, sed, awk, jq, yq, rg, fd |
-| File | tar, zip, unzip, 7z, gzip, xz |
-| Editors | code, vim, nvim, nano, emacs |
-| Utils | ffmpeg, convert, pandoc, gh, htop, tree, find... |
-
-### Option 2: Instruction Prompt
-
-Tell LLM to use `pyx` instead of shell commands. Prefer the combined instructions file: [docs/pyx.instructions.md](docs/pyx.instructions.md).
-
-**Generate environment-specific instructions:**
-
-```bash
-# Generate a single combined instructions file
-pyx gi
-# Default output: $PYX_INSTRUCTIONS_PATH or ./docs/pyx.instructions.md
-```
-
-Quick version — add to VS Code `prompts/global.instructions.md`:
-
-```markdown
-**IMPORTANT: Avoid shell commands. Use python-executor instead.**
-
-- Get env info: `pyx info` (shows OS, shell syntax, env keys, commands)
-- Run code: `pyx run --code "..."`
-- Run async: `pyx run --code "await ..." --async`
-- Run with timeout: `pyx run --code "..." --timeout 30`
-- Run file (recommended for LLM/agent): `pyx run --file "temp/pyx_task.py" -- ...`
-- (Legacy) Run base64 (interactive): `pyx run --base64 "..."`
-- Launch interpreter: `pyx python`
-- Install: `pyx add --package "name"`
-```
-
-## Environment Variables
-
-pyx loads `.env` files from two locations (later overrides earlier):
-
-1. **User config**: `%APPDATA%\pyx\.env` (Windows) or `~/.config/pyx/.env` (Unix)
-2. **Local**: `.env` in the current working directory
-
-Create a `.env` file for database URLs, API keys, etc.:
-
-```bash
-# %APPDATA%\pyx\.env (Windows) or ~/.config/pyx/.env (Unix)
-MYSQL_URL=mysql+pymysql://user:pass@host/db
-REDIS_URL=redis://:password@host:6379/0
-```
-
-Use in code:
-
-```python
-import os
-url = os.environ['MYSQL_URL']
-```
-
-Use `pyx info --env` to see available keys (values hidden).
-
-### pyx Configuration Variables
-
-| Variable | Description |
-|----------|-------------|
-| `PYX_INSTRUCTIONS_PATH` | Output path for `pyx gi`. Default: `./docs/pyx.instructions.md`. |
-| `PYX_SKILL_PATH` | Output path for `pyx gs`. Default: `./docs/pyx`. |
-| `PYX_PYX_INSTRUCTIONS_STYLE` | pyx-usage section style in the combined file. Allowed: `file` (recommended) or `base64` (legacy). |
-
-### UV Proxy & Index Variables
-
-These variables configure proxy and package index for `pyx add` and `pyx python`:
-
-| Variable | Description |
-|----------|-------------|
-| `PYX_UV_HTTP_PROXY` | HTTP proxy for UV/pip (maps to `HTTP_PROXY`) |
-| `PYX_UV_HTTPS_PROXY` | HTTPS proxy for UV/pip (maps to `HTTPS_PROXY`) |
-| `PYX_UV_NO_PROXY` | Hosts to bypass proxy (maps to `NO_PROXY`) |
-| `PYX_UV_INDEX_URL` | Custom PyPI mirror (maps to `UV_INDEX_URL`) |
-
-Example (in `%APPDATA%\pyx\.env`):
-
-```bash
-PYX_INSTRUCTIONS_PATH=C:\\Users\\me\\AppData\\Roaming\\Code\\User\\prompts\\pyx.instructions.md
-
-# Proxy settings (China/corporate network)
-PYX_UV_HTTP_PROXY=http://proxy.example.com:8080
-PYX_UV_HTTPS_PROXY=http://proxy.example.com:8080
-PYX_UV_NO_PROXY=localhost,127.0.0.1
-
-# Use Tsinghua mirror for faster downloads in China
-PYX_UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-```
-
-> **Note:** `PYX_*` variables are pyx internal configuration and are **excluded** from the generated instructions file.
-
-## Optional Packages
-
-Core installation includes only `mcp[cli]`, `python-dotenv`, and `rich`.
-
-Install with `[full]` for additional packages:
-
-```bash
-uv tool install -e ".[full]"
-```
-
-**Included in `[full]`:**
-
-| Category | Packages |
-|----------|----------|
-| AWS | boto3 |
-| Security | cryptography |
-| Date/Time | dateparser, arrow, pytz |
-| Microsoft | exchangelib, msal |
-| Data | numpy, pandas, orjson, pydantic |
-| Excel/Office | openpyxl, xlrd, xlsxwriter, python-docx, pypdf |
-| Database | pymysql, redis, sqlalchemy |
-| HTTP/Network | requests, httpx, aiohttp, paramiko |
-| Web Scraping | beautifulsoup4, lxml, chardet |
-| Text | markdown, jinja2, pyyaml |
-| Image | pillow, matplotlib |
-| CLI/Display | tabulate, tqdm |
-| Utilities | pyperclip, wrapt, pywin32 (Windows) |
-| Bloomberg API | blpapi |
-| Crypto Exchange API | ccxt |
-
-## Project Structure
+`docs/` contains public reference docs and example outputs.
+`skills/` is the recommended committed bootstrap for LLM sessions.
 
 ```text
 python-executor/
-├── .env.example      # Example config (copy to user config dir)
-├── pyproject.toml
+├── .env.example
 ├── docs/
-│   ├── pyx.instructions.md        # Combined instructions (recommended)
-│   └── pyx/                       # Claude skill files (generated by pyx gs)
-│       ├── SKILL.md
-│       └── references/
+│   ├── pyx.instructions.md
+│   ├── pyx/
+│   └── inspect/
+├── skills/                    # Recommended committed bootstrap
+│   ├── pyx/                    # Generated by: pyx gs --skill pyx --privacy public -o skills/pyx
+│   └── inspect/                # Generated by: pyx gs --skill inspect --privacy public -o skills/inspect
 └── src/
-    ├── pyx_core/     # Core library
-    │   ├── constants.py    # Commands list, ENV_PATTERNS
-    │   ├── executor.py     # run_code, run_file, run_async_code
-    │   ├── environment.py  # get_environment_info, format_environment_info
-    │   ├── shell_syntax.py # Shell syntax patterns and testing
-    │   └── generator/      # Instructions & skill generation
-    │       ├── __init__.py
-    │       ├── common.py       # Shared utilities and data classes
-    │       ├── instruction.py  # generate_pyx_instructions, generate_shell_instructions
-    │       └── skill.py        # generate_skill_files (Claude skills)
-    ├── pyx_cli/      # CLI interface
-    └── pyx_mcp/      # MCP server
+    ├── pyx_core/
+    ├── pyx_cli/
+    └── pyx_mcp/
 ```
