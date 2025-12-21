@@ -1133,37 +1133,45 @@ def _generate_environment_md(
     """
     lines: list[str] = []
 
+    from ..environment import format_environment_info
+
     privacy_normalized: Literal["public", "local"] = "local" if str(privacy).strip().lower() == "local" else "public"
     
     lines.append("# pyx Environment Information")
     lines.append("")
+    info_snapshot = format_environment_info(
+        info,
+        include_system=True,
+        include_syntax=True,
+        include_env=True,
+        include_commands=True,
+    )
+
     if privacy_normalized == "public":
-        lines.append("Public-safe environment guidance for pyx.")
-        lines.append("This file avoids embedding machine-specific paths or package inventories.")
+        lines.append("Public-safe environment snapshot for pyx.")
+        lines.append("This avoids package inventories and redacts common machine-specific paths.")
         lines.append("")
-        lines.append("## Runtime Detection (Recommended)")
+
+        lines.append("## Snapshot (equivalent to `pyx info`)")
         lines.append("")
-        lines.append("To learn the *current* environment on any machine, run:")
-        lines.append("")
-        lines.append("```bash")
-        lines.append("pyx info")
-        lines.append("pyx info --json")
+        lines.append("```text")
+        lines.append(info_snapshot)
         lines.append("```")
         lines.append("")
-        lines.append("`pyx info --json` includes:")
-        lines.append("- OS + shell type")
-        lines.append("- dynamically-tested shell syntax support")
-        lines.append("- env var *keys* (values hidden)")
-        lines.append("- available system commands (111 checks)")
-        lines.append("")
-        lines.append("## Notes")
-        lines.append("")
-        lines.append("- Do not assume tools exist. Always check `pyx info --commands` or `pyx info --json`.")
+        lines.append("Notes:")
+        lines.append("- This is a snapshot captured when the skill was generated.")
         lines.append("- Prefer using external tools via `subprocess.run()` inside pyx scripts (not raw shell).")
         lines.append("")
-        return "\n".join(lines)
+        return _redact_for_public("\n".join(lines))
 
     lines.append("Details about the current pyx execution environment (local mode).")
+    lines.append("")
+
+    lines.append("## Snapshot (equivalent to `pyx info`)")
+    lines.append("")
+    lines.append("```text")
+    lines.append(info_snapshot)
+    lines.append("```")
     lines.append("")
     
     # System Info
@@ -1201,20 +1209,7 @@ def _generate_environment_md(
     lines.append("```")
     lines.append("")
     
-    # Available commands
-    if info.commands:
-        available_commands = [cmd for cmd, data in info.commands.items() if data["available"]]
-        if available_commands:
-            lines.append("## Available System Commands")
-            lines.append("")
-            lines.append(f"**{len(available_commands)} commands** available on this system:")
-            lines.append("")
-            lines.append("```text")
-            lines.append(", ".join(sorted(available_commands)))
-            lines.append("```")
-            lines.append("")
-            lines.append("> Use via `subprocess.run()` inside pyx scripts, NOT as shell commands.")
-            lines.append("")
+    # Available commands and syntax support are already included in the snapshot above.
     
     # Installed packages
     lines.append("## Installed Python Packages")
@@ -1243,19 +1238,6 @@ def _generate_environment_md(
         lines.append(f"Failed to enumerate packages: {e}")
     lines.append("")
     
-    # Shell Syntax Support
-    if info.syntax_support:
-        lines.append("## Shell Syntax Support")
-        lines.append("")
-        lines.append(f"Tested on: **{info.shell_type}**")
-        lines.append("")
-        lines.append("| Pattern | Supported | Syntax |")
-        lines.append("|---------|-----------|--------|")
-        for name in SYNTAX_PATTERN_ORDER:
-            if name in info.syntax_support:
-                s = info.syntax_support[name]
-                ok = "✓" if s["supported"] else "✗"
-                lines.append(f"| {s['description']} | {ok} | `{s['syntax']}` |")
-        lines.append("")
+    # Shell Syntax Support is already included in the snapshot above.
     
     return _redact_for_public("\n".join(lines))

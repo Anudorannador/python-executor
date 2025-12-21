@@ -488,7 +488,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
         type=str,
         choices=["pyx", "inspect", "summary", "all"],
         default="pyx",
-        help="Which skill template to generate (default: pyx). Use 'all' to generate pyx + inspect.",
+        help="Which skill template to generate (default: pyx). Use 'all' to generate pyx + inspect + summary.",
     )
     default_privacy = os.environ.get("PYX_SKILL_PRIVACY", "public")
     skill_parser.add_argument(
@@ -855,7 +855,7 @@ def main() -> NoReturn | None:
 
         def _resolve_all_base_dir(path: Path) -> Path:
             leaf = path.name.strip().lower()
-            return path.parent if leaf in ("pyx", "inspect") else path
+            return path.parent if leaf in ("pyx", "inspect", "summary") else path
         
         # Print only mode - just generate SKILL.md content
         if args.print_only:
@@ -895,6 +895,13 @@ def main() -> NoReturn | None:
                         show_progress=True,
                         force=args.force,
                         skill="inspect",
+                        privacy=privacy,
+                    ),
+                    generate_skill_files(
+                        output_dir=base_dir / "summary",
+                        show_progress=True,
+                        force=args.force,
+                        skill="summary",
                         privacy=privacy,
                     ),
                 ]
