@@ -52,6 +52,7 @@ from pyx_core import (  # noqa: E402
     generate_pyx_instructions,
     generate_shell_instructions,
     generate_skill_files,
+    generate_summary_files,
     save_with_backup,
     _generate_skill_md,
     _generate_inspect_skill_md,
@@ -499,6 +500,21 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
         help="Skill output privacy mode. 'public' avoids machine-specific paths; 'local' includes details (may contain absolute paths).",
     )
 
+    # summary command
+    summary_parser = subparsers.add_parser(
+        "summary",
+        help="Generate leader-summary templates (SKILL.md + references/)",
+    )
+    default_summary_output = os.environ.get("PYX_SUMMARY_PATH", "./docs/summary")
+    summary_parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=str,
+        default=default_summary_output,
+        help=f"Output directory (default: $PYX_SUMMARY_PATH or {default_summary_output})",
+    )
+    summary_parser.add_argument("--force", action="store_true", help="Overwrite without backup")
+
     return parser, gen_parser
 
 
@@ -743,6 +759,30 @@ def main() -> NoReturn | None:
         if result.error:
             print(result.error, file=sys.stderr)
         sys.exit(0 if result.success else 1)
+    elif args.command == "summary":
+        output_dir = Path(getattr(args, "output_dir", "./docs/summary"))
+        try:
+            result = generate_summary_files(output_dir=output_dir, force=getattr(args, "force", False))
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            sys.exit(1)
+
+        if not result.success:
+            console.print(f"[red]Error: {result.error}[/red]")
+            sys.exit(1)
+
+        console.print(f"\n[green]✓ Generated summary templates at:[/green] {result.output_dir}")
+        if result.backup_dir:
+            console.print(f"[dim]  Backup created: {result.backup_dir}[/dim]")
+        console.print("\n[bold]Files created:[/bold]")
+        for f in result.files_created:
+            try:
+                rel_path = Path(f).relative_to(Path(result.output_dir)) if result.output_dir else f
+                console.print(f"  • {rel_path}")
+            except ValueError:
+                console.print(f"  • {f}")
+
+        sys.exit(0)
     elif args.command == "info":
         # Determine what to include
         # If no specific flags, show all
