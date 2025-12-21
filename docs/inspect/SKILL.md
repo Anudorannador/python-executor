@@ -10,6 +10,13 @@ Run investigations in a reproducible, evidence-first way.
 **Default and required: MANIFEST_IO mode.**
 All investigation artifacts must be written to files.
 
+## Depends On (Soft)
+
+Load these skills alongside `inspect`:
+
+- `manifest` - MANIFEST_IO contract and workflow
+- `learn` - skill extraction workflow and summary reference
+
 ## Current Environment
 
 - **OS**: Windows (AMD64)
@@ -42,7 +49,7 @@ If you need to look up or compute anything (files, data, web, dependency info):
 3. Write outputs to files and index them in a manifest.
 4. Print a short summary only (paths + sizes).
 
-See: [MANIFEST_IO Details](references/manifest-io.md)
+See the `manifest` skill for the full spec.
 
 ## MCP Tools (Only If Requested)
 

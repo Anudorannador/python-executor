@@ -15,46 +15,22 @@ Use pyx for safe Python execution. **Default: MANIFEST_IO mode**.
 - **pyx Python**: 3.12.12
 - **pyx version**: 0.1.0
 
-## MANIFEST_IO Mode (Default)
+## Depends On (Soft)
 
-A **universal file-first workflow** for LLM/Agent code execution.
-Works with ANY local environment: **pyx**, **Python venv**, **uv**, **Node.js**, etc.
+Load these skills alongside `pyx`:
 
-### Core Principles
+- `manifest` - MANIFEST_IO contract and workflow
+- `learn` - skill extraction workflow and summary reference
 
-1. **Input**: Read from JSON file (not CLI args)
-2. **Output**: Write to files (manifest + data)
-3. **Stdout**: Summary only (paths + sizes)
-4. **Size Check**: Always check output size before reading into LLM context
+## MANIFEST_IO (Default)
 
-### Environment Detection
+pyx assumes **MANIFEST_IO** by default:
+- Read inputs from JSON files
+- Write outputs to files + a manifest
+- Print a short stdout summary (paths + sizes)
+- Check sizes before reading outputs into context
 
-| Indicator | Environment | Run Command |
-|-----------|-------------|-------------|
-| `pyx` available | pyx | `pyx run --file "temp/task.py"` |
-| `.venv/` exists | Python venv | `.venv/bin/python temp/task.py` (Unix) or `.venv\\Scripts\\python temp/task.py` (Win) |
-| `uv.lock` exists | uv project | `uv run python temp/task.py` |
-| `node_modules/` exists | Node.js | `node temp/task.js` |
-| `package.json` (no modules) | Node.js | `npm install && node temp/task.js` |
-
-### With pyx (Recommended)
-
-```bash
-pyx ensure-temp --dir "temp"
-# Write: temp/task.py
-# Write: temp/task.input.json (if needed)
-pyx run --file "temp/task.py" --input-path "temp/task.input.json"
-```
-
-### Environment Variables (auto-set by pyx)
-
-| Variable | Description |
-|----------|-------------|
-| `PYX_INPUT_PATH` | Path to input JSON file |
-| `PYX_OUTPUT_DIR` | Directory for outputs |
-| `PYX_OUTPUT_PATH` | Path to manifest file |
-| `PYX_LOG_PATH` | Path to log file |
-| `PYX_RUN_ID` | Unique run identifier |
+See the `manifest` skill for the full spec.
 
 ## Non-Strict Mode (Opt-out)
 
@@ -94,9 +70,7 @@ pyx run --file "temp/list_files.py"
 
 ## References
 
-For detailed documentation, read these files when needed:
+pyx-specific references:
 
-- [MANIFEST_IO Details](references/manifest-io.md) - Complete I/O contract, multi-environment examples
-- [Learn Skill](references/learn-skill.md) - Extract reusable skills (trigger: "learn skill")
 - [CLI Commands](references/commands.md) - Full CLI help output
 - [Environment Info](references/environment.md) - Paths, packages, shell info

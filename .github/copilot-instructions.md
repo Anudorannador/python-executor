@@ -1,1 +1,2 @@
-DO NOT MODIFY files in docs because they are generated. Modify the source files instead.DO NOT MODIFY `docs` files directly. They are generated, see README.md
+DO NOT MODIFY files in `docs` because they are generated. Modify the source files instead.
+DO NOT MODIFY `docs` files directly. They are generated, see README.md

@@ -8,6 +8,13 @@ version: 0.1.0
 
 Generate concise, leader-friendly status summaries.
 
+## Related (Soft)
+
+Often used with:
+
+- `learn` - when extracting a reusable summary skill from history
+- `manifest` - when producing evidence via file-first artifacts
+
 ## Output
 
 Use the template in `references/leader-summary-template.md`.
