@@ -20,6 +20,7 @@ from .instruction import (
 )
 
 from .skill import (
+    build_skill_artifacts,
     generate_skill_files,
     # Expose for CLI --print mode
     _generate_skill_md,
@@ -45,6 +46,7 @@ __all__ = [
     "generate_pyx_instructions",
     "generate_shell_instructions",
     # Skill generation
+    "build_skill_artifacts",
     "generate_skill_files",
     "_generate_skill_md",
     "_generate_inspect_skill_md",

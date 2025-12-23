@@ -20,3 +20,6 @@ uv.lock
 docs/pyx.*.instructions.md.bak*
 docs/pyx.bak*
 *.bak*
+
+# already in guides/use-cases/
+docs/references/use-cases/*

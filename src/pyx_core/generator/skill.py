@@ -31,6 +31,93 @@ if TYPE_CHECKING:
     from ..environment import EnvironmentInfo
 
 
+def build_skill_artifacts(
+    *,
+    show_progress: bool = False,
+    skill: str = "pyx",
+    privacy: Literal["public", "local"] = "public",
+) -> dict[Path, str]:
+    """Build skill file contents without writing to disk.
+
+    Returns a mapping of relative file paths to file content.
+    """
+    from ..environment import get_environment_info
+
+    skill_normalized = (skill or "pyx").strip().lower()
+    if skill_normalized not in {"pyx", "inspect", "summary", "manifest", "learn"}:
+        raise ValueError(
+            f"Unsupported skill: {skill_normalized}. Supported: pyx, inspect, summary, manifest, learn"
+        )
+
+    info = get_environment_info(show_progress=show_progress) if skill_normalized in {"pyx", "inspect"} else None
+
+    artifacts: dict[Path, str] = {}
+
+    if skill_normalized == "manifest":
+        artifacts[Path("SKILL.md")] = build_manifest_skill_md()
+        artifacts[Path("references") / "manifest-io.md"] = _generate_manifest_io_md()
+        return artifacts
+
+    if skill_normalized == "learn":
+        artifacts[Path("SKILL.md")] = build_learn_skill_md()
+        artifacts[Path("references") / "learn-skill.md"] = _generate_learn_skill_md()
+        artifacts[Path("references") / "summary.md"] = build_learn_summary_reference_md()
+        return artifacts
+
+    if skill_normalized == "summary":
+        artifacts[Path("SKILL.md")] = build_summary_skill_md()
+        artifacts[Path("references") / "leader-summary-template.md"] = build_leader_summary_template_md()
+        artifacts[Path("references") / "markdown-images.md"] = build_markdown_images_md()
+        return artifacts
+
+    if skill_normalized == "inspect":
+        artifacts[Path("SKILL.md")] = _generate_inspect_skill_md(info)
+        artifacts[Path("references") / "investigation-log-template.md"] = _generate_inspect_log_template_md()
+        artifacts[Path("references") / "code-verification.md"] = _generate_code_verification_md()
+        return artifacts
+
+    # pyx
+    artifacts[Path("SKILL.md")] = _generate_skill_md(info)
+    artifacts[Path("references") / "commands.md"] = _generate_commands_md(info)
+    artifacts[Path("references") / "environment.md"] = _generate_environment_md(info, privacy=privacy)
+
+    # Use-cases (copy into references/ so they're available in the skill package)
+    use_cases: list[tuple[str, str]] = []
+
+    # Use-cases live in the repo under guides/use-cases/.
+    # When generating skills from an editable install, attempt to find the repo root
+    # based on this file location: <repo>/src/pyx_core/generator/skill.py
+    repo_root_guess = Path(__file__).resolve().parents[3]
+    guide_candidates = [
+        Path.cwd().resolve() / "guides" / "use-cases",
+        repo_root_guess / "guides" / "use-cases",
+    ]
+
+    def _load_use_case(filename: str) -> str | None:
+        for base in guide_candidates:
+            p = base / filename
+            if p.exists() and p.is_file():
+                try:
+                    return p.read_text(encoding="utf-8")
+                except Exception:
+                    return None
+        return None
+
+    for fname in [
+        "01-incident-debugging-with-data-layer.md",
+        "02-global-vs-project-skills.md",
+        "03-migration-baseline-for-rewrite.md",
+    ]:
+        content = _load_use_case(fname)
+        if content:
+            use_cases.append((fname, content))
+
+    for fname, content in use_cases:
+        artifacts[Path("references") / "use-cases" / fname] = content
+
+    return artifacts
+
+
 def generate_skill_files(
     output_dir: str | Path,
     show_progress: bool = False,
@@ -250,6 +337,20 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("")
     lines.append("Use pyx for safe Python execution. **Default: MANIFEST_IO mode**.")
     lines.append("")
+
+    # Read-first rule for environment details
+    lines.append("## Read-First: Environment (Mandatory)")
+    lines.append("")
+    lines.append("If you need any of the following, you **MUST** read `references/environment.md` first:")
+    lines.append("- Which Python packages are installed for pyx")
+    lines.append("- OS details")
+    lines.append("- Shell type/path and shell syntax notes")
+    lines.append("")
+    lines.append("Do **NOT** do trial-and-error checks (e.g. guessing imports, probing commands).")
+    lines.append("Prefer the generated environment document as the source of truth.")
+    lines.append("")
+    lines.append("Note: `pyx info` can be slow. Prefer reading `references/environment.md` first.")
+    lines.append("")
     
     # Environment summary
     lines.append("## Current Environment")
@@ -329,6 +430,12 @@ def _generate_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("")
     lines.append("- [CLI Commands](references/commands.md) - Full CLI help output")
     lines.append("- [Environment Info](references/environment.md) - Paths, packages, shell info")
+    lines.append("")
+    lines.append("Common use-cases:")
+    lines.append("")
+    lines.append("- [Use Case 1: Incident Debugging](references/use-cases/01-incident-debugging-with-data-layer.md)")
+    lines.append("- [Use Case 2: Project vs Global Skills](references/use-cases/02-global-vs-project-skills.md)")
+    lines.append("- [Use Case 3: Rewrite Migration Baseline](references/use-cases/03-migration-baseline-for-rewrite.md)")
     lines.append("")
     
     return "\n".join(lines)
@@ -684,7 +791,7 @@ def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
 
     lines.append("---")
     lines.append("name: inspect")
-    lines.append('description: "Structured investigation with a persistent markdown log and evidence-first execution. Use when: investigating a user question, auditing behavior, verifying dependencies, or using MCP tools. Triggers: inspect, investigate, analyze, audit, verify, deepwiki. Default mode: MANIFEST_IO."')
+    lines.append('description: "Structured investigation with a persistent markdown log and evidence-first execution. Use when: investigating a user question, auditing behavior, or verifying dependencies. Triggers: inspect, investigate, analyze, audit, verify. Default mode: MANIFEST_IO."')
     lines.append("version: 0.1.0")
     lines.append("---")
     lines.append("")
@@ -741,16 +848,6 @@ def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("See the `manifest` skill for the full spec.")
     lines.append("")
 
-    lines.append("## MCP Tools (Only If Requested)")
-    lines.append("")
-    lines.append("If the user explicitly requests MCP tools (e.g. DeepWiki):")
-    lines.append("1. **Check available MCPs** in the current environment.")
-    lines.append("2. Confirm with the user which MCP you will use.")
-    lines.append("3. Record the MCP name, query, and results (or output file paths) in the investigation log.")
-    lines.append("")
-    lines.append("If the requested MCP is not available, stop and ask the user how to proceed.")
-    lines.append("")
-
     lines.append("## Code Verification")
     lines.append("")
     lines.append("When the user asks to verify against the *actual code* in the current environment:")
@@ -765,11 +862,11 @@ def _generate_inspect_skill_md(info: "EnvironmentInfo") -> str:
     lines.append("")
     lines.append("Documentation targets (only when needed):")
     lines.append("- Official docs (e.g. Microsoft Docs) to confirm API contracts")
-    lines.append("- DeepWiki/repo docs to confirm intended usage patterns")
+    lines.append("- Repo docs / READMEs to confirm intended usage patterns")
     lines.append("")
-    lines.append("If using docs/MCP tools:")
+    lines.append("If using docs:")
     lines.append("- Confirm the source/version with the user")
-    lines.append("- Record the MCP name + query")
+    lines.append("- Record what you queried / where")
     lines.append("- Save evidence to files via MANIFEST_IO and link paths in the investigation log")
     lines.append("")
     lines.append("See: [Code Verification](references/code-verification.md)")
@@ -848,7 +945,7 @@ def _generate_code_verification_md() -> str:
     lines.append("- Record paths/sizes of artifacts in the investigation log.")
     lines.append("")
 
-    lines.append("## Documentation Verification (MCP / Official Docs)")
+    lines.append("## Documentation Verification (Official Docs)")
     lines.append("")
     lines.append("Sometimes “verify against code” is not enough:")
     lines.append("")
@@ -869,11 +966,10 @@ def _generate_code_verification_md() -> str:
 
     lines.append("### How to verify docs (evidence-based)")
     lines.append("")
-    lines.append("Use MCP tools when available (examples):")
+    lines.append("Use documentation sources when available (examples):")
     lines.append("")
-    lines.append("- DeepWiki (repo-aware docs)")
     lines.append("- Microsoft Docs (official product API references)")
-    lines.append("- Other MCP doc/search tools available in the environment")
+    lines.append("- Repo documentation (README, changelog, migration notes)")
     lines.append("")
     lines.append("Rules:")
     lines.append("")
@@ -1242,9 +1338,7 @@ def _generate_environment_md(
     lines.append("")
     lines.append("```text")
     pyx_bin = shutil.which("pyx")
-    pyx_mcp_bin = shutil.which("pyx-mcp")
     lines.append(f"pyx executable: {pyx_bin or '<not found>'}")
-    lines.append(f"pyx-mcp executable: {pyx_mcp_bin or '<not found>'}")
     lines.append(f"pyx Python: {sys.executable}")
     lines.append("```")
     lines.append("")
@@ -1253,7 +1347,7 @@ def _generate_environment_md(
     lines.append("## Module Locations")
     lines.append("")
     lines.append("```text")
-    for name in ["pyx_core", "pyx_cli", "pyx_mcp"]:
+    for name in ["pyx_core", "pyx_cli"]:
         try:
             mod = importlib.import_module(name)
             mod_file = getattr(mod, "__file__", None)

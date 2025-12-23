@@ -9,55 +9,34 @@ Start with these prompt-first use cases:
 - [Project skills vs global skills (template without project leakage)](guides/use-cases/02-global-vs-project-skills.md)
 - [Migration baseline for a rewrite (Python → Rust, SQLite → Postgres)](guides/use-cases/03-migration-baseline-for-rewrite.md)
 
-This repo is designed around four repeatable outputs:
+This repo is designed around three repeatable outputs:
 
 - **Skills**: reusable, file-based rules + references (bootstrap for new sessions)
-- **Instructions**: a single combined prompt file for agents
 - **MANIFEST_IO runs**: scripts + input JSON + manifest + log + outputs
 - **Investigation logs**: reproducible code verification and audits
 
 ## Start Here (Public Repo Workflow)
 
-### 1) Generate public-safe skills (recommended)
+### 1) Generate the pyx Claude skill (interactive)
 
-Generate a committed `skills/` directory that does not embed machine-specific paths:
-
-```bash
-pyx gs --skill all --privacy public -o skills
-```
-
-To install skills directly into your Claude skills folder on your local machine:
-
-```text
-# Windows (cmd)
-pyx gs --skill all --privacy local -o "%USERPROFILE%\.claude\skills"
-
-# Windows (PowerShell)
-pyx gs --skill all --privacy local -o "$env:USERPROFILE\.claude\skills"
-
-# Linux/macOS
-pyx gs --skill all --privacy local -o "$HOME/.claude/skills"
-```
-
-In every new session, instruct the LLM to read:
-
-- `skills/pyx/SKILL.md`
-- `skills/pyx/references/commands.md`
-- `skills/pyx/references/environment.md`
-
-> **Why `--privacy public`?** It avoids leaking usernames/absolute paths. Runtime facts should be detected via `pyx info --json` on each machine.
-
-### 2) Generate a single instructions file
-
-Generate a combined, environment-aware instructions file (useful for VS Code prompts / Copilot setup):
+Run:
 
 ```bash
-pyx gi
+pyx gs
 ```
 
-Default output: `$PYX_INSTRUCTIONS_PATH` or `./docs/pyx.instructions.md`.
+Behavior:
 
-### 3) Use MANIFEST_IO for all real work
+- Asks `public` vs `local` privacy mode (default: public)
+- Generates the `pyx` skill and prints it to the terminal
+- Asks whether to save
+- If saving, asks whether to overwrite existing output
+- Finally asks where to save:
+  - `docs\pyx` (default)
+  - `%USERPROFILE%\.claude\skills\pyx`
+  - custom path
+
+### 2) Use MANIFEST_IO for all real work
 
 **MANIFEST_IO** is the file-first execution contract:
 
@@ -166,32 +145,11 @@ Verify:
 pyx info
 ```
 
-## MCP integration (optional)
-
-Add to VS Code `settings.json`:
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "python-executor": {
-        "command": "pyx-mcp"
-      }
-    }
-  }
-}
-```
-
 ## Configuration (.env)
 
 Common `PYX_*` configuration variables:
 
-- `PYX_INSTRUCTIONS_PATH` (output for `pyx gi`)
-- `PYX_PYX_INSTRUCTIONS_STYLE` (`file` recommended)
-- `PYX_SKILL_PATH` (default output dir for `pyx gs`)
-- `PYX_SKILL_PRIVACY` (`public` recommended for public repos)
 - `PYX_UV_HTTP_PROXY`, `PYX_UV_HTTPS_PROXY`, `PYX_UV_NO_PROXY`, `PYX_UV_INDEX_URL` (uv/pip proxy/index)
-
 See: `.env.example`
 
 ## Project structure
@@ -217,6 +175,5 @@ python-executor/
 │   └── summary/
 └── src/
     ├── pyx_core/
-    ├── pyx_cli/
-    └── pyx_mcp/
+  └── pyx_cli/
 ```
