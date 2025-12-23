@@ -142,6 +142,19 @@ def _check_commands(show_progress: bool = False) -> dict[str, dict[str, Any]]:
             results[cmd] = {"available": True, "version": version, "path": path}
         else:
             results[cmd] = {"available": False, "version": None, "path": None}
+
+    # `pyx` is this tool itself. Even if it is not installed as a console script
+    # (and thus not discoverable via PATH), it is available to the current Python
+    # environment. Always include it and mark it available.
+    try:
+        from pyx_core import __version__ as _pyx_version
+    except Exception:
+        _pyx_version = None
+    results["pyx"] = {
+        "available": True,
+        "version": _pyx_version,
+        "path": shutil.which("pyx") or "<python package>",
+    }
     return results
 
 

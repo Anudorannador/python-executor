@@ -22,4 +22,4 @@ docs/pyx.bak*
 *.bak*
 
 # already in guides/use-cases/
-docs/references/use-cases/*
+docs/pyx/references/use-cases/*

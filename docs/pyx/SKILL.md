@@ -8,6 +8,18 @@ version: 0.1.0
 
 Use pyx for safe Python execution. **Default: MANIFEST_IO mode**.
 
+## Read-First: Environment (Mandatory)
+
+If you need any of the following, you **MUST** read `references/environment.md` first:
+- Which Python packages are installed for pyx
+- OS details
+- Shell type/path and shell syntax notes
+
+Do **NOT** do trial-and-error checks (e.g. guessing imports, probing commands).
+Prefer the generated environment document as the source of truth.
+
+Note: `pyx info` can be slow. Prefer reading `references/environment.md` first.
+
 ## Current Environment
 
 - **OS**: Windows (AMD64)
@@ -74,3 +86,9 @@ pyx-specific references:
 
 - [CLI Commands](references/commands.md) - Full CLI help output
 - [Environment Info](references/environment.md) - Paths, packages, shell info
+
+Common use-cases:
+
+- [Use Case 1: Incident Debugging](references/use-cases/01-incident-debugging-with-data-layer.md)
+- [Use Case 2: Project vs Global Skills](references/use-cases/02-global-vs-project-skills.md)
+- [Use Case 3: Rewrite Migration Baseline](references/use-cases/03-migration-baseline-for-rewrite.md)

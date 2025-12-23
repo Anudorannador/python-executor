@@ -301,14 +301,26 @@ def _redact_for_public(text: str) -> str:
         pass
 
     # Redact common absolute home patterns (even if Path.home() didn't match).
+    # IMPORTANT: avoid double-inserting <REDACTED_USER> when home already got replaced.
+    import re
+
     # Windows: C:\Users\Name\...
-    redacted = redacted.replace("C:\\Users\\", "C:\\Users\\<REDACTED_USER>\\")
+    redacted = re.sub(
+        r"C:\\Users\\(?!<REDACTED_USER>\\)[^\\]+",
+        r"C:\\Users\\<REDACTED_USER>",
+        redacted,
+        flags=re.IGNORECASE,
+    )
+
     # macOS: /Users/Name/...
-    redacted = redacted.replace("/Users/", "/Users/<REDACTED_USER>/")
+    redacted = re.sub(
+        r"/Users/(?!<REDACTED_USER>/)[^/]+",
+        r"/Users/<REDACTED_USER>",
+        redacted,
+    )
 
     # Redact VS Code profile ids inside typical prompts paths.
     # Example: ...\profiles\-7c411965\prompts\...
-    import re
     redacted = re.sub(r"(\\profiles\\)[^\\]+(\\prompts\\)", r"\1<REDACTED_PROFILE>\2", redacted, flags=re.IGNORECASE)
 
     # Redact credential-like URLs if they ever appear.
@@ -1387,5 +1399,6 @@ def _generate_environment_md(
     lines.append("")
     
     # Shell Syntax Support is already included in the snapshot above.
-    
-    return _redact_for_public("\n".join(lines))
+
+    # Local mode: keep full details (do NOT redact).
+    return "\n".join(lines)
